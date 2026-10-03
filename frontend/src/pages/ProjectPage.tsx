@@ -1,8 +1,9 @@
-import { Share2, Star } from "lucide-react";
+import { CircleHelp, Share2, Star } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, del, get, patch } from "../api";
 import { MembersShareModal } from "../components/ProjectMenu";
+import { openManual } from "../manual";
 import GuideView from "../guide/GuideView";
 import { allowedSteps, notifyProjectsChanged, resolveStep, STEPS, type Step } from "../guide/steps";
 import { PROJECT_STATUS, ROLE_LABEL, when } from "../format";
@@ -91,6 +92,10 @@ function ProjectTabs() {
 function ProjectHead() {
   const { project, reload } = useProject();
   const toast = useToast();
+  const loc = useLocation();
+  // 지금 보고 있는 탭에 맞는 매뉴얼 절
+  const step = loc.pathname.match(/\/step\/(\d)/)?.[1];
+  const helpSection = !step ? "3-1-표의-칸-설명" : project.runs_total === 0 ? "4-첫-실험-정하기" : resolveStep(project, Number(step)) === 2 ? "6-능동학습-결과" : "5-실험-데이터-입력";
   const [round, setRound] = useState<number | null>(null);
   const [sharing, setSharing] = useState(false);
   useEffect(() => {
@@ -118,6 +123,7 @@ function ProjectHead() {
         <h1>{project.name}</h1>
         <p className="proj-sub">{meta}</p>
       </div>
+      <button className="ghost" onClick={() => openManual(helpSection)} title="이 화면의 사용법을 새 창으로"><CircleHelp size={15} />도움말</button>
       <button className={`icon-btn ${project.is_favorite ? "on" : ""}`} onClick={() => void fav()}
         aria-label={project.is_favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"} title={project.is_favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}>
         <Star size={17} fill={project.is_favorite ? "currentColor" : "none"} />

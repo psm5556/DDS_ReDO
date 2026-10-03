@@ -70,9 +70,12 @@ _dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if _dist.is_dir():
     app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
 
+    _dist_root = _dist.resolve()
+
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):  # type: ignore[no-untyped-def]
-        f = _dist / path
-        if path and f.is_file():
+        f = (_dist_root / path).resolve()
+        # dist 밖으로 나가는 경로(../, %2e%2e 등)는 파일로 내주지 않는다
+        if path and f.is_file() and f.is_relative_to(_dist_root):
             return FileResponse(f)
-        return FileResponse(_dist / "index.html")
+        return FileResponse(_dist_root / "index.html")

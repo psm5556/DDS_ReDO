@@ -1,17 +1,17 @@
 # DDS ReDO — Recipe Design Optimization
 
 개발 단계의 공정 레시피를 **적은 실험으로** 찾는 **산포 인지형 능동학습 DOE** 웹앱입니다 (DDS 플랫폼 모듈).
-엔지니어는 앱이 제안한 조건으로 실험하고 결과만 입력합니다. 앱은 평균(μ)과 **산포(σ)**를 함께 학습해, 흔들림이 작은(강건한) **추천 레시피**와 **다음에 할 실험**을 제안합니다.
+엔지니어는 앱이 제안한 조건으로 실험하고 결과만 입력합니다. 앱은 평균(μ)과 **산포**(σ)를 함께 학습해, 흔들림이 작은(강건한) **추천 레시피**와 **다음에 할 실험**을 제안합니다.
 
-![능동학습 결과 화면](docs/manual/img/12-step2.png)
+![능동학습 결과 화면](frontend/public/manual/img/12-step2.png)
 
-- **처음 쓰는 분**: [사용 매뉴얼](docs/USER_MANUAL.md) (그림으로 보는 단계별 안내)
+- **처음 쓰는 분**: [사용 매뉴얼](docs/USER_MANUAL.md) (그림으로 보는 단계별 안내). 앱 안에서는 사이드바 아래 📖 버튼이나 DOE 화면의 **도움말**로 HTML 매뉴얼(`/manual/index.html`)이 새 창으로 열립니다.
 - **이 UI 디자인을 다른 프로젝트에 쓰려면**: [DESIGN.md](DESIGN.md) (토큰·컴포넌트·레이아웃·UX 규칙, 복사해 쓰는 [tokens.css](frontend/src/design/tokens.css) + [kit.css](frontend/src/design/kit.css), [미리보기](docs/design/preview.html))
 - **개발자**: 개발 지침은 [`CLAUDE.md`](CLAUDE.md), 현재 상태와 남은 작업은 [`docs/HANDOFF.md`](docs/HANDOFF.md)를 보세요.
 
 ## 사용 흐름
 
-![사용 흐름](docs/manual/img/00-cycle.png)
+![사용 흐름](frontend/public/manual/img/00-cycle.png)
 
 1. **DOE 만들기**: 인자·응답·목표를 표로 입력합니다(엑셀 표를 붙여넣어도 됩니다). 이미 해 둔 실험 데이터가 있으면 그 표에서 설정을 자동으로 채울 수 있습니다.
 2. **첫 실험 계획**: 앱이 인자 공간을 고르게 덮는 첫 실험(반복 포함)을 만들거나, 기존 데이터를 가져와 시작합니다.
@@ -39,7 +39,7 @@ backend/    FastAPI + SQLAlchemy(SQLite/PostgreSQL) + scikit-learn(GP), 선택�
 frontend/   React + TypeScript + Vite + Plotly
   src/pages, src/guide, src/sections, src/components    e2e/  Playwright E2E
   scripts/manual-shots.mjs  사용 매뉴얼 그림 생성
-docs/       HANDOFF.md(진행 상황), USER_MANUAL.md(사용 매뉴얼), manual/img(매뉴얼 그림), design/(UI 키트 미리보기)
+docs/       HANDOFF.md(진행 상황), USER_MANUAL.md(사용 매뉴얼), (매뉴얼 그림은 frontend/public/manual/img), design/(UI 키트 미리보기)
 DESIGN.md   디자인 시스템 — 다른 프로젝트에 재사용하는 방법
 ```
 
@@ -76,7 +76,8 @@ cd frontend; $env:REDO_PYTHON="python"; npm run e2e    # Playwright E2E (별도 
 ```powershell
 cd backend;  $env:REDO_DATABASE_URL="sqlite:///./manual.db"; python -m app.seed --reset; python -m uvicorn app.main:app --port 8021
 cd frontend; $env:REDO_API_TARGET="http://localhost:8021"; npx vite --port 5191 --strictPort
-cd frontend; npm run manual:shots                      # docs/manual/img/*.png 생성 (주황색 번호 표시 포함)
+cd frontend; npm run manual:shots                      # frontend/public/manual/img/*.png 생성 (주황색 번호 표시 포함)
+cd frontend; npm run manual:html                       # docs/USER_MANUAL.md → public/manual/index.html (npm run build 때 자동)
 ```
 
 ## 주요 환경변수 (`backend/.env`, 접두사 `REDO_`)

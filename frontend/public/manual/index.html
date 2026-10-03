@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DDS ReDO 사용 매뉴얼</title>
+<script>
+  // 화면 모드: 앱과 같은 설정(localStorage 'redo.theme')을 따른다
+  try { document.documentElement.dataset.theme = localStorage.getItem("redo.theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch (e) {}
+</script>
+<style>
+/* ============================================================================
+   DDS ReDO 디자인 토큰 — 이 앱의 모든 색·글꼴·둥글기·그림자의 단일 원본.
+   다른 프로젝트에서 같은 디자인을 쓰려면 이 파일 + kit.css 를 복사하세요 (DESIGN.md 참고).
+   - 밝은 테마: :root,  어두운 테마: :root[data-theme="dark"]
+   - 주 버튼 색(#2563eb)은 두 테마에서 같게 유지한다 (kit.css의 button.primary 보정).
+   ============================================================================ */
+/* DDS ReDO — 디자인 토큰 (미니멀: 회색 바탕 + 흰 카드 + 선으로 구분, 포인트 색은 기존 앱의 파랑 하나)
+   UI 색상: --brand (주요 버튼·선택·링크)
+   데이터 의미 색상(앱 전체 공통, CLAUDE.md 7.5):
+   - 평균(μ): 청록  --mean
+   - 산포(σ, 공정 고유 변동): 보라  --sigma
+   - 모델 불확실성(데이터 부족): 회청색 + 점선  --epi
+   색만으로 의미를 전달하지 않도록 항상 기호(μ, σ, ±)와 문구를 함께 쓴다. */
+:root {
+  /* 무채색 (zinc) */
+  --ink: #18181b;
+  --ink-2: #52525b;
+  --ink-3: #71717a;
+  --ink-4: #a1a1aa;
+  --paper: #f7f7f8;
+  --panel: #ffffff;
+  --panel-2: #fafafa;
+  --panel-3: #f4f4f5;
+  --line: #ececef;
+  --line-2: #f3f3f5;
+  /* 포인트 = 기존 앱 버튼 색 (blue) */
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-500: #3b82f6;
+  --brand-400: #60a5fa;
+  --brand-soft: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  /* 데이터 의미 색상 */
+  --mean: #0d9488;
+  --mean-soft: #f0fdfa;
+  --mean-ring: #99f6e4;
+  --sigma: #7c3aed;
+  --sigma-soft: #f5f3ff;
+  --sigma-ring: #ddd6fe;
+  --epi: #64748b;
+  /* 상태 */
+  --ok: #16a34a;   --ok-soft: #f0fdf4;   --ok-ring: #bbf7d0;
+  --warn: #b45309; --warn-soft: #fffbeb; --warn-ring: #fde68a;
+  --err: #dc2626;  --err-soft: #fef2f2;  --err-ring: #fecaca;
+  --info: #1d4ed8; --info-soft: #eff6ff; --info-ring: #bfdbfe;
+  --focus: #3b82f6;
+  --radius-s: 8px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+  --shadow-card: none;
+  --shadow-card-md: 0 4px 16px rgb(24 24 27 / 0.06);
+  --shadow-modal: 0 24px 64px -16px rgb(24 24 27 / 0.28);
+  --font: "Pretendard Variable", Pretendard, Inter, "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --fs-xs: 12px;
+  --fs-s: 13px;
+  --fs-m: 14px;
+  --fs-l: 16px;
+  --fs-xl: 20px;
+  --fs-xxl: 26px;
+  --side-w: 264px;
+  /* 표면·선 보조 토큰 (다크 모드에서 함께 바뀜) */
+  --ink-5: #c4c4cc;
+  --side-bg: #fbfbfc;
+  --hover: #f1f1f4;
+  --active: #ebebf0;
+  --dot: #d4d4d8;
+  --line-strong: #d4d4d8;
+  --vline: #f3f3f6;
+  --row-hover: #fcfcfd;
+  --err-row: #fffafa;
+  --sel: #dbeafe;
+  --sel-head: #bfdbfe;
+  --track: #ececf3;
+  --glass: rgb(255 255 255 / 0.92);
+  --toast-bg: #18181b;
+  --scroll: #d4d4d8;
+  color-scheme: light;
+}
+
+/* ---------- 다크 모드 (html[data-theme="dark"]). 주 버튼은 밝은 테마와 같은 파랑을 유지 ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #f4f4f5;
+  --ink-2: #d4d4d8;
+  --ink-3: #a1a1aa;
+  --ink-4: #7c7c86;
+  --ink-5: #52525b;
+  --paper: #0e0e10;
+  --panel: #17171a;
+  --panel-2: #1b1b1f;
+  --panel-3: #26262b;
+  --line: #2a2a30;
+  --line-2: #222227;
+  --line-strong: #3f3f46;
+  --side-bg: #121214;
+  --hover: #202024;
+  --active: #26262c;
+  --dot: #3f3f46;
+  --vline: #202025;
+  --row-hover: #1c1c20;
+  --err-row: rgb(239 68 68 / 0.07);
+  --sel: rgb(37 99 235 / 0.28);
+  --sel-head: rgb(37 99 235 / 0.4);
+  --track: #2a2a31;
+  --glass: rgb(23 23 26 / 0.9);
+  --toast-bg: #2a2a30;
+  --scroll: #3f3f46;
+  --brand: #3b82f6;          /* 글자·링크·선택 표시는 어두운 바탕에서 읽히도록 조금 밝게 */
+  --brand-hover: #2563eb;
+  --brand-500: #3b82f6;
+  --brand-400: #60a5fa;
+  --brand-soft: rgb(37 99 235 / 0.14);
+  --brand-100: rgb(37 99 235 / 0.24);
+  --brand-200: rgb(59 130 246 / 0.38);
+  --mean: #2dd4bf;   --mean-soft: rgb(45 212 191 / 0.1);  --mean-ring: rgb(45 212 191 / 0.3);
+  --sigma: #a78bfa;  --sigma-soft: rgb(167 139 250 / 0.12); --sigma-ring: rgb(167 139 250 / 0.3);
+  --epi: #94a3b8;
+  --ok: #4ade80;   --ok-soft: rgb(34 197 94 / 0.13);  --ok-ring: rgb(34 197 94 / 0.3);
+  --warn: #fbbf24; --warn-soft: rgb(245 158 11 / 0.12); --warn-ring: rgb(245 158 11 / 0.3);
+  --err: #f87171;  --err-soft: rgb(239 68 68 / 0.12);  --err-ring: rgb(239 68 68 / 0.32);
+  --info: #93c5fd; --info-soft: rgb(37 99 235 / 0.14); --info-ring: rgb(59 130 246 / 0.32);
+  --shadow-card-md: 0 4px 16px rgb(0 0 0 / 0.35);
+  --shadow-modal: 0 24px 64px -16px rgb(0 0 0 / 0.7);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+body { margin: 0; font-family: var(--font); font-size: 15px; line-height: 1.75; color: var(--ink); background: var(--paper); -webkit-font-smoothing: antialiased; }
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+/* 머리 막대 */
+.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 24px; background: var(--glass); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.top .logo { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg, var(--brand-500), var(--brand-hover)); color: #fff; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.top b { font-size: 15px; }
+.top .sub { color: var(--ink-4); font-size: 13px; }
+.top .grow { flex: 1; }
+.top button { font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); cursor: pointer; }
+.top button:hover { background: var(--panel-3); color: var(--ink); }
+.toc-btn { display: none !important; }
+/* 본문 + 오른쪽 목차 */
+.wrap { display: grid; grid-template-columns: minmax(0, 860px) 260px; gap: 48px; justify-content: center; padding: 32px 24px 120px; }
+main { min-width: 0; }
+.intro h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 8px; line-height: 1.3; }
+.intro p { color: var(--ink-3); margin: 0; }
+h2 { font-size: 24px; letter-spacing: -0.02em; margin: 56px 0 16px; padding-top: 8px; line-height: 1.35; }
+h3 { font-size: 18px; margin: 36px 0 12px; line-height: 1.4; }
+h2 .anchor, h3 .anchor { opacity: 0; margin-left: -22px; width: 22px; display: inline-block; color: var(--ink-4); font-weight: 400; text-decoration: none; }
+h2:hover .anchor, h3:hover .anchor { opacity: 1; }
+p, ul, ol { margin: 0 0 14px; }
+li { margin: 3px 0; }
+hr { border: none; border-top: 1px solid var(--line); margin: 40px 0; }
+strong { font-weight: 650; }
+code { font-size: 0.88em; background: var(--panel-3); border-radius: 5px; padding: 1px 6px; }
+blockquote { margin: 16px 0; padding: 12px 16px; border-radius: var(--radius-m); background: var(--brand-soft); border: 1px solid var(--brand-100); color: var(--ink-2); }
+blockquote p:last-child { margin-bottom: 0; }
+figure { margin: 18px 0 22px; }
+figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--radius-l); background: var(--panel); cursor: zoom-in; box-shadow: var(--shadow-card-md); }
+figcaption { font-size: 12.5px; color: var(--ink-4); margin-top: 8px; text-align: center; }
+.table-wrap { overflow-x: auto; margin: 14px 0 20px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 9px 14px; text-align: left; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+th { font-size: 12.5px; font-weight: 600; color: var(--ink-3); background: var(--panel-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+sub { color: var(--ink-4); }
+/* 오른쪽 목차: 따라다니며 현재 위치 강조 */
+nav.toc { position: sticky; top: 80px; align-self: start; max-height: calc(100vh - 100px); overflow-y: auto; font-size: 13.5px; padding-left: 14px; border-left: 1px solid var(--line); }
+nav.toc .h { font-size: 12px; font-weight: 600; color: var(--ink-4); letter-spacing: 0.04em; margin-bottom: 8px; }
+nav.toc input { width: 100%; font: inherit; font-size: 13px; height: 32px; padding: 0 10px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--panel); color: var(--ink); }
+nav.toc input:focus { outline: none; border-color: var(--brand-500); }
+nav.toc a { display: block; padding: 4px 8px; margin-left: -15px; border-left: 2px solid transparent; color: var(--ink-3); line-height: 1.45; text-decoration: none; }
+nav.toc a.l3 { padding-left: 22px; font-size: 13px; color: var(--ink-4); }
+nav.toc a:hover { color: var(--ink); }
+nav.toc a.on { color: var(--brand); border-left-color: var(--brand); font-weight: 600; }
+nav.toc a[hidden], nav.toc .none[hidden] { display: none; }
+nav.toc .none { color: var(--ink-4); font-size: 12.5px; padding: 4px 0; }
+.to-top { position: fixed; right: 24px; bottom: 24px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); font-size: 18px; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .2s; box-shadow: var(--shadow-card-md); }
+.to-top.show { opacity: 1; pointer-events: auto; }
+/* 그림 크게 보기 */
+.zoom { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / 0.75); display: none; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out; }
+.zoom.open { display: flex; }
+.zoom img { max-width: 100%; max-height: 100%; border-radius: var(--radius-m); background: #fff; }
+/* 좁은 화면: 목차는 위에서 펼쳐 보기 */
+@media (max-width: 1100px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); padding: 20px 16px 100px; }
+  nav.toc { display: none; position: fixed; top: 56px; right: 0; left: 0; max-height: 70vh; z-index: 30; background: var(--panel); border: none; border-bottom: 1px solid var(--line); padding: 16px 20px; box-shadow: var(--shadow-modal); }
+  nav.toc.open { display: block; }
+  nav.toc a { margin-left: 0; }
+  .toc-btn { display: inline-flex !important; }
+  .top .sub { display: none; }
+}
+@media print {
+  .top, nav.toc, .to-top { display: none !important; }
+  .wrap { display: block; padding: 0; }
+  figure img { box-shadow: none; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="logo">Re</span><b>DDS ReDO 사용 매뉴얼</b><span class="sub">· 2026-10-03 기준</span>
+  <span class="grow"></span>
+  <button class="toc-btn" type="button" onclick="document.querySelector('nav.toc').classList.toggle('open')">☰ 목차</button>
+  <button type="button" onclick="toggleTheme()" title="밝은/어두운 화면">◐ 화면</button>
+  <button type="button" onclick="print()" title="인쇄 또는 PDF로 저장">⎙ 인쇄</button>
+</header>
+<div class="wrap">
+  <main>
+    <div class="intro"><h1>DDS ReDO 사용 매뉴얼</h1></div>
+<p><strong>DDS ReDO</strong>는 적은 실험으로 공정 레시피를 찾도록 돕는 앱입니다.
+실험 결과를 넣으면 앱이 학습해서 <strong>추천 레시피</strong>와 <strong>다음에 할 실험</strong>을 알려 줍니다.
+통계를 몰라도 됩니다. 앱이 정해 준 조건으로 실험하고 결과만 입력하면 됩니다.</p>
+<p><figure><img src="img/00-cycle.png" alt="사용 흐름" width="1200" height="280" loading="lazy" data-zoom><figcaption>사용 흐름</figcaption></figure></p>
+<blockquote>
+<p>그림 위의 <strong>주황색 번호</strong>는 본문의 번호와 같습니다.
+화면의 예시는 앱에 들어 있는 데모 DOE(CMP 슬러리 배합, Poly-Si 식각)와 새로 만든 &quot;Cu 도금 조건 최적화&quot;입니다.</p>
+</blockquote>
+<h2 id="1-시작하기"><a class="anchor" href="#1-시작하기" aria-hidden="true">#</a>1. 시작하기</h2>
+<p>사내 계정으로 로그인합니다. 로그인하면 원래 열려던 화면(예: 공유받은 링크)으로 바로 이동합니다.</p>
+<p><figure><img src="img/01-login.png" alt="로그인" width="1440" height="900" loading="lazy" data-zoom><figcaption>로그인</figcaption></figure></p>
+<ol>
+<li>개발·시험 환경에서는 사용자를 골라 들어갑니다. 실제 서비스에서는 사내 로그인 화면으로 연결됩니다.</li>
+</ol>
+<hr>
+<h2 id="2-첫-화면-둘러보기"><a class="anchor" href="#2-첫-화면-둘러보기" aria-hidden="true">#</a>2. 첫 화면 둘러보기</h2>
+<p><figure><img src="img/02-home.png" alt="첫 화면" width="1440" height="900" loading="lazy" data-zoom><figcaption>첫 화면</figcaption></figure></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th align="center">번호</th>
+<th>이름</th>
+<th>하는 일</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td><strong>DOE 목록 (사이드바)</strong></td>
+<td>내가 만든 DOE, 함께하는 DOE, 공유받은 예측이 모두 여기 있습니다. 파란 점(●)이 붙은 DOE는 <strong>내가 할 일이 있는</strong> DOE입니다. 이름을 누르면 설정, 펼치면 ①·② 단계로 바로 갈 수 있습니다.</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td><strong>할 일 요약</strong></td>
+<td>지금 할 일, 결과 입력을 기다리는 실험 수, 새 추천이 준비된 DOE 수</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td><strong>DOE 카드</strong></td>
+<td>진행 막대와 &quot;다음에 할 일&quot;이 보입니다. 카드를 누르면 <strong>할 일이 있는 단계로 바로</strong> 갑니다.</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td><strong>새 DOE</strong></td>
+<td>처음부터 새 DOE를 만듭니다 (<a href="#3-%EC%83%88-doe-%EB%A7%8C%EB%93%A4%EA%B8%B0">3장</a>).</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td><strong>기존 데이터로 시작</strong></td>
+<td>이미 해 둔 실험 결과(엑셀 표)로 DOE를 만듭니다 (<a href="#3-2-%EA%B8%B0%EC%A1%B4-%EB%8D%B0%EC%9D%B4%ED%84%B0%EC%97%90%EC%84%9C-%EB%A7%8C%EB%93%A4%EA%B8%B0">3-2</a>).</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>DOE</strong>(Design of Experiments, 실험계획)는 여기서 &quot;레시피를 찾는 프로젝트 하나&quot;를 뜻합니다.</p>
+</blockquote>
+<blockquote>
+<p><strong>이 매뉴얼 다시 보기</strong>: 사이드바 아래 <strong>📖 사용 매뉴얼</strong> 버튼을 누르면 새 창으로 열립니다. DOE 화면 오른쪽 위의 <strong>도움말</strong>을 누르면 지금 보고 있는 화면의 설명으로 바로 갑니다.</p>
+</blockquote>
+<hr>
+<h2 id="3-새-doe-만들기"><a class="anchor" href="#3-새-doe-만들기" aria-hidden="true">#</a>3. 새 DOE 만들기</h2>
+<p>한 페이지에서 모두 입력합니다. 표는 <strong>엑셀처럼</strong> 동작하고, 엑셀 표를 <strong>복사해서 한 번에 붙여넣을 수</strong> 있습니다.</p>
+<p><figure><img src="img/03-new-doe.png" alt="새 DOE 만들기" width="1440" height="1180" loading="lazy" data-zoom><figcaption>새 DOE 만들기</figcaption></figure></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th align="center">번호</th>
+<th>항목</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td><strong>기본 정보</strong></td>
+<td>DOE 이름(필수), 설명, 태그</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td><strong>인자</strong></td>
+<td>바꿔 볼 조건 (예: 전류 밀도, 도금 시간)</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td><strong>응답과 목표</strong></td>
+<td>측정할 결과와 목표 (예: 두께 10 μm, 균일도 5% 이하)</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td><strong>실험 계획</strong></td>
+<td>첫 실험 수, 반복 측정, 한 번에 제안받을 실험 수, 실험 예산</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td><strong>DOE 만들기</strong></td>
+<td>저장합니다. 빠진 칸이 있으면 빨갛게 표시됩니다.</td>
+</tr>
+<tr>
+<td align="center">6</td>
+<td><strong>기존 데이터에서 만들기</strong></td>
+<td>엑셀 데이터에서 인자·응답을 자동으로 채웁니다 (<a href="#3-2-%EA%B8%B0%EC%A1%B4-%EB%8D%B0%EC%9D%B4%ED%84%B0%EC%97%90%EC%84%9C-%EB%A7%8C%EB%93%A4%EA%B8%B0">3-2</a>).</td>
+</tr>
+</tbody></table></div>
+<p>머리글 옆의 <strong>파란 점</strong>(●)은 꼭 채워야 하는 칸입니다.</p>
+<h3 id="3-1-표의-칸-설명"><a class="anchor" href="#3-1-표의-칸-설명" aria-hidden="true">#</a>3-1. 표의 칸 설명</h3>
+<p><strong>인자 표</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>칸</th>
+<th>뜻</th>
+<th>예</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>인자 ●</td>
+<td>조건 이름</td>
+<td>전류 밀도</td>
+</tr>
+<tr>
+<td>하한 ● · 상한 ●</td>
+<td>실험할 수 있는 범위</td>
+<td>1 ~ 5</td>
+</tr>
+<tr>
+<td>세팅 정밀도 ●</td>
+<td>장비에서 실제로 맞출 수 있는 최소 단위. 앱이 제안하는 값은 이 단위로 반올림됩니다.</td>
+<td>0.1</td>
+</tr>
+<tr>
+<td>스케일</td>
+<td>값이 10배씩 차이 나는 인자(농도 등)는 <strong>로그</strong></td>
+<td>선형</td>
+</tr>
+<tr>
+<td>단위</td>
+<td>표시용</td>
+<td>A/dm²</td>
+</tr>
+</tbody></table></div>
+<p><strong>응답과 목표 표</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>칸</th>
+<th>뜻</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>응답 ●</td>
+<td>측정 항목 이름</td>
+</tr>
+<tr>
+<td>목표 ●</td>
+<td><strong>최대(망대)</strong>: 클수록 좋음 · <strong>최소(망소)</strong>: 작을수록 좋음 · <strong>목표값(망목)</strong>: 특정 값에 맞출수록 좋음</td>
+</tr>
+<tr>
+<td>목표값</td>
+<td>망목일 때 맞추려는 값 (망목이면 필수)</td>
+</tr>
+<tr>
+<td>LSL · USL</td>
+<td>규격 하한·상한. 있으면 &quot;규격 안에 들 확률&quot;로 평가합니다.</td>
+</tr>
+<tr>
+<td>최적화 기준</td>
+<td>보통 <strong>자동</strong>으로 두세요. 규격이 있으면 규격 만족 확률, 없으면 평균과 산포를 함께 봅니다.</td>
+</tr>
+<tr>
+<td>가중치</td>
+<td>응답이 여러 개일 때 중요도 (기본 1, 0이면 관찰만)</td>
+</tr>
+<tr>
+<td>입력 최소 · 최대</td>
+<td>결과를 입력할 때 오타를 잡는 범위 (예: 82를 820으로 잘못 친 경우)</td>
+</tr>
+<tr>
+<td>소수점</td>
+<td>결과 표시 자리수</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>팁: 엑셀에서 붙여넣기</strong>
+엑셀에서 머리글 행까지 복사한 뒤, 표의 첫 칸을 누르고 <strong>Ctrl+V</strong> 하세요.
+머리글 이름으로 열을 찾아 넣으므로 엑셀의 열 순서가 달라도 됩니다. 행이 모자라면 자동으로 늘어납니다.
+목표 칸에는 &quot;망대&quot;, &quot;망소&quot;, &quot;망목&quot;, &quot;최대&quot; 같은 글자를 그대로 붙여넣어도 됩니다.</p>
+</blockquote>
+<h3 id="3-2-기존-데이터에서-만들기"><a class="anchor" href="#3-2-기존-데이터에서-만들기" aria-hidden="true">#</a>3-2. 기존 데이터에서 만들기</h3>
+<p>이미 해 둔 실험 결과가 엑셀에 있다면, 표를 붙여넣기만 하면 인자·응답 설정을 앱이 채워 줍니다.</p>
+<p><figure><img src="img/04-from-data.png" alt="기존 데이터로 인자·응답 만들기" width="1440" height="900" loading="lazy" data-zoom><figcaption>기존 데이터로 인자·응답 만들기</figcaption></figure></p>
+<ol>
+<li><strong>구분</strong>: 열마다 인자 / 응답 / 메모 / 무시를 고릅니다. 앱이 미리 골라 둡니다. 값이 몇 가지로 반복되는 열은 인자, 값이 제각각인 열은 응답, &quot;No&quot;나 &quot;비고&quot; 같은 열은 무시나 메모로 고릅니다.</li>
+<li><strong>목표</strong>: 응답 열의 목표(최대/최소/목표값)를 고릅니다.</li>
+<li><strong>채우기</strong>: 누르면 인자 범위(데이터의 최소~최대), 세팅 정밀도(소수 자리), 단위가 자동으로 채워집니다. 목표값이나 규격(LSL·USL)은 채운 뒤 표에서 입력하세요.</li>
+</ol>
+<p>이렇게 만든 DOE는 <strong>DOE 만들기 + 데이터 N건 가져오기</strong> 버튼 한 번으로 생성과 데이터 가져오기가 함께 끝나고, 바로 <a href="#6-%EB%8A%A5%EB%8F%99%ED%95%99%EC%8A%B5-%EA%B2%B0%EA%B3%BC">② 능동학습 결과</a>로 이동합니다.</p>
+<hr>
+<h2 id="4-첫-실험-정하기"><a class="anchor" href="#4-첫-실험-정하기" aria-hidden="true">#</a>4. 첫 실험 정하기</h2>
+<p>DOE를 만들면 어떻게 시작할지 고르는 화면이 나옵니다.</p>
+<p><figure><img src="img/05-start.png" alt="어떻게 시작할까요" width="1440" height="900" loading="lazy" data-zoom><figcaption>어떻게 시작할까요</figcaption></figure></p>
+<ol>
+<li><strong>새로 설계</strong>: 앱이 인자 범위 전체를 고르게 살펴보는 첫 실험 조건을 만들어 줍니다. 일부 조건은 일부러 2~3번 반복합니다(반복해야 산포를 알 수 있기 때문).</li>
+<li><strong>기존 데이터로 시작</strong>: 이미 해 둔 실험 결과를 붙여넣어 시작합니다.</li>
+<li>DOE 안의 화면은 위쪽 탭으로 오갑니다: <strong>설정 · ① 실험 데이터 입력 · ② 능동학습 결과</strong>.</li>
+</ol>
+<h3 id="기존-데이터-가져오기"><a class="anchor" href="#기존-데이터-가져오기" aria-hidden="true">#</a>기존 데이터 가져오기</h3>
+<p><figure><img src="img/06-import.png" alt="기존 데이터 가져오기" width="1440" height="900" loading="lazy" data-zoom><figcaption>기존 데이터 가져오기</figcaption></figure></p>
+<ol>
+<li>엑셀 표를 <strong>머리글까지 복사해 Ctrl+V</strong> 하면 열 이름으로 인자·결과를 찾아 넣습니다. 같은 조건이 여러 행이면 <strong>반복</strong>(1/2, 2/2)으로 표시합니다.</li>
+<li>DOE에 없는 열(예: 로트 번호)은 빼고 가져오며, 무엇을 뺐는지 알려 줍니다.</li>
+<li><strong>가져오기</strong>를 누르면 &quot;0차&quot; 실험으로 저장됩니다(런 ID <code>0차-01</code>…). 이후 앱이 제안하는 실험은 1차부터입니다.</li>
+</ol>
+<ul>
+<li>인자 값은 <strong>반올림하지 않고</strong> 실제로 세팅한 값 그대로 학습합니다.</li>
+<li>설정 범위 밖의 값이 있으면 <strong>범위 넓히기</strong> 또는 <strong>범위 밖 행 빼기</strong>를 고를 수 있습니다.</li>
+<li>이미 DOE에 있는 실험과 <strong>똑같은 행</strong>은 중복으로 알려 줍니다. 같은 데이터를 두 번 넣으면 반복 측정으로 잘못 학습되니 <strong>중복 행 빼기</strong>를 누르세요.</li>
+<li>결과가 빈 행도 가져올 수 있습니다. 나중에 ① 화면에서 채우면 됩니다.</li>
+</ul>
+<hr>
+<h2 id="5-실험-데이터-입력"><a class="anchor" href="#5-실험-데이터-입력" aria-hidden="true">#</a>5. 실험 데이터 입력</h2>
+<p>이번 차수에 할 실험 목록이자 결과 입력 표입니다.</p>
+<p><figure><img src="img/07-step1.png" alt="실험 데이터 입력" width="1440" height="900" loading="lazy" data-zoom><figcaption>실험 데이터 입력</figcaption></figure></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th align="center">번호</th>
+<th>이름</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td><strong>단계 탭</strong></td>
+<td>남은 결과 수가 함께 보입니다 (&quot;결과 14건 남음&quot;).</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td><strong>조건 칸</strong></td>
+<td>실험할 조건. 실제로 다르게 세팅했다면 <strong>그대로 고쳐 쓰면</strong> 됩니다(노란색으로 표시, 학습에는 실제 값을 씁니다).</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td><strong>결과 칸</strong></td>
+<td>측정값을 입력합니다.</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td><strong>반복</strong></td>
+<td>같은 조건을 여러 번 하는 실험은 <code>1/3</code>(3번 중 첫 번째)처럼, 지난 차수의 조건을 다시 하면 <code>재확인</code>으로 표시합니다.</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td><strong>상태</strong></td>
+<td>결과를 모두 넣으면 자동으로 <strong>완료</strong>. 실험을 못 했으면 <strong>못 함</strong>을 누릅니다.</td>
+</tr>
+<tr>
+<td align="center">6</td>
+<td><strong>기존 데이터 추가</strong></td>
+<td>예전에 해 둔 실험 결과를 더 넣습니다.</td>
+</tr>
+<tr>
+<td align="center">7</td>
+<td><strong>표 일괄 복사</strong></td>
+<td>표 전체를 머리글과 함께 복사합니다 (엑셀에 붙여넣기).</td>
+</tr>
+<tr>
+<td align="center">8</td>
+<td><strong>엑셀 파일로 다운로드</strong></td>
+<td>표를 <code>.xlsx</code> 파일로 받습니다 (DOE 설정 시트 포함).</td>
+</tr>
+<tr>
+<td align="center">9</td>
+<td><strong>실험 시트 인쇄</strong></td>
+<td>현장에서 쓸 A4 시트를 인쇄합니다.</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>런 ID <code>1차-03</code>은 &quot;1차 실험의 3번째 런&quot;이라는 뜻입니다. <strong>순서</strong>는 실험할 순서(무작위)입니다. 순서대로 하면 시간에 따른 장비 변화가 결과에 섞이는 것을 줄일 수 있습니다.</li>
+<li>행 맨 앞의 휴지통은 마우스를 올리면 보입니다. 지운 런은 표와 학습에서 빠지지만, 기록은 남아 복구할 수 있습니다.</li>
+<li>표 오른쪽 위 <strong>?</strong> 에 사용법이 요약되어 있습니다.</li>
+</ul>
+<h3 id="5-1-실험-시트-인쇄"><a class="anchor" href="#5-1-실험-시트-인쇄" aria-hidden="true">#</a>5-1. 실험 시트 인쇄</h3>
+<p><figure><img src="img/11-print.png" alt="실험 시트" width="1440" height="900" loading="lazy" data-zoom><figcaption>실험 시트</figcaption></figure></p>
+<p>런마다 조건과 결과를 적는 칸, <strong>QR 코드</strong>가 있습니다. 태블릿이나 휴대폰으로 QR을 찍으면 그 런의 입력 화면이 바로 열려 현장에서 결과를 넣을 수 있습니다.</p>
+<h3 id="5-2-결과-넣기-직접-입력-또는-엑셀-붙여넣기"><a class="anchor" href="#5-2-결과-넣기-직접-입력-또는-엑셀-붙여넣기" aria-hidden="true">#</a>5-2. 결과 넣기 (직접 입력 또는 엑셀 붙여넣기)</h3>
+<p><figure><img src="img/08-paste.png" alt="결과 붙여넣기" width="1176" height="520" loading="lazy" data-zoom><figcaption>결과 붙여넣기</figcaption></figure></p>
+<ol>
+<li>결과 칸을 누르고 입력한 뒤 <strong>Enter</strong>를 누르면 아래 칸으로 내려갑니다. 엑셀에서 여러 칸을 복사해 <strong>Ctrl+V</strong> 하면 한 번에 들어갑니다.<ul>
+<li>머리글이나 런 ID 열을 같이 복사해도 됩니다. 앱이 알맞은 행·열을 찾아 넣습니다(예전 형식 <code>B1-02</code>도 인식).</li>
+</ul>
+</li>
+<li>입력하면 <strong>자동 저장</strong>됩니다. &quot;저장됨&quot;이 보이면 끝입니다. 네트워크가 끊겨도 입력은 이 브라우저에 임시 보관되고, 다시 연결되면 저장됩니다.</li>
+</ol>
+<p>입력 칸 색의 뜻:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>색</th>
+<th>뜻</th>
+<th>어떻게 하나요</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>빨간 칸</td>
+<td>숫자가 아님 → 저장 안 됨</td>
+<td>값을 고치세요</td>
+</tr>
+<tr>
+<td>노란 칸</td>
+<td>입력 허용 범위 밖이거나 예측과 크게 다름 → <strong>저장은 됨</strong></td>
+<td>값과 단위를 한 번 더 확인하세요 (진짜 발견일 수도 있습니다)</td>
+</tr>
+<tr>
+<td>노란 글자(조건 칸)</td>
+<td>계획과 다르게 세팅함</td>
+<td>실제 세팅값이면 그대로 두세요</td>
+</tr>
+</tbody></table></div>
+<h3 id="5-3-못-한-실험-표시"><a class="anchor" href="#5-3-못-한-실험-표시" aria-hidden="true">#</a>5-3. 못 한 실험 표시</h3>
+<p><figure><img src="img/09-failed.png" alt="못 한 실험" width="1440" height="900" loading="lazy" data-zoom><figcaption>못 한 실험</figcaption></figure></p>
+<p><strong>못 함</strong>을 누르면 이 창이 뜹니다.</p>
+<ol>
+<li><strong>실패</strong>(실험은 했지만 결과를 못 얻음) 또는 <strong>실행 불가</strong>(그 조건을 맞출 수 없음)를 고릅니다.</li>
+<li>사유를 고르고 필요하면 메모를 남깁니다.</li>
+</ol>
+<p>이 런은 학습에서 빠집니다. 실수로 눌렀다면 상태 칸의 <strong>되돌리기</strong>를 누르세요.</p>
+<h3 id="5-4-표의-일부만-복사하기"><a class="anchor" href="#5-4-표의-일부만-복사하기" aria-hidden="true">#</a>5-4. 표의 일부만 복사하기</h3>
+<p><figure><img src="img/10-drag-copy.png" alt="드래그 복사" width="1176" height="640" loading="lazy" data-zoom><figcaption>드래그 복사</figcaption></figure></p>
+<p>칸을 누른 채 끌면 여러 행·열을 고를 수 있습니다(Shift+클릭도 가능, 머리글을 누르면 그 열 전체).
+<strong>Ctrl+C</strong>를 누르면 고른 칸만 복사되어 엑셀에 바로 붙여넣을 수 있습니다(1).
+범위를 고른 채 <strong>Ctrl+V</strong> 하면 그 범위의 왼쪽 위 칸부터 붙여넣습니다. <strong>Esc</strong>를 누르면 선택이 풀립니다.</p>
+<blockquote>
+<p>결과를 다 넣었으면 오른쪽 아래 <strong>다음: 능동학습 →</strong> 을 누르세요. 결과가 일부만 들어가 있어도 넘어갈 수 있습니다(빈 실험은 학습에서 빠지고, 다음 제안은 그 조건과 겹치지 않게 고릅니다).</p>
+</blockquote>
+<hr>
+<h2 id="6-능동학습-결과"><a class="anchor" href="#6-능동학습-결과" aria-hidden="true">#</a>6. 능동학습 결과</h2>
+<p>앱이 지금까지의 결과로 학습해서 <strong>추천 레시피</strong>와 <strong>다음에 할 실험</strong>을 보여 줍니다.</p>
+<p><figure><img src="img/12-step2.png" alt="능동학습 결과" width="1440" height="1060" loading="lazy" data-zoom><figcaption>능동학습 결과</figcaption></figure></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th align="center">번호</th>
+<th>이름</th>
+<th>읽는 법</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td><strong>추천 레시피</strong></td>
+<td>지금까지 학습한 결과로 가장 좋다고 예측되는 조건입니다.</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td><strong>응답별 예상</strong></td>
+<td>그 조건에서의 예상값과 <strong>규격 안에 들 확률</strong>. 막대가 길수록 좋고, 확률이 낮은 응답은 주황색과 ⚠로 표시됩니다.</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td><strong>목표 달성 점수</strong></td>
+<td>모든 응답을 함께 본 점수(100점 만점). 응답끼리 서로 충돌하면(예: 제거율↑ ↔ 결함↓) 100점이 어려울 수 있습니다.</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td><strong>다음에 할 실험</strong></td>
+<td>앱이 고른 다음 실험 조건입니다. 엑셀처럼 고치거나 붙여넣을 수 있고, <strong>조건 추가</strong>로 직접 넣을 수도 있습니다.</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td><strong>추천 레시피 확인 실험 3회</strong></td>
+<td>추천 레시피를 3번 반복하는 실험을 목록에 더합니다. 예측대로 재현되는지 확인할 때 씁니다.</td>
+</tr>
+<tr>
+<td align="center">6</td>
+<td><strong>확정</strong></td>
+<td>목록을 다음 차수 실험으로 확정하고 ① 화면으로 갑니다.</td>
+</tr>
+<tr>
+<td align="center">7</td>
+<td><strong>자세히 보기</strong></td>
+<td>예측 범위, 다른 선택지, 모델 신뢰도, 그래프, 조건 시뮬레이션</td>
+</tr>
+</tbody></table></div>
+<p><strong>다음 실험의 &quot;이유&quot;</strong></p>
+<ul>
+<li><strong>좋은 결과 기대</strong>: 더 좋은 레시피가 있을 것 같은 곳</li>
+<li><strong>아직 모르는 영역</strong>: 데이터가 부족해 확인이 필요한 곳</li>
+<li><strong>반복 측정</strong>: 같은 조건에서 얼마나 흔들리는지(산포)를 알기 위한 반복</li>
+</ul>
+<blockquote>
+<p>실험이 적을 때는 &quot;아직 실험이 적어 예측이 정확하지 않을 수 있습니다&quot;가 표시됩니다. 이때의 추천은 <strong>후보</strong>로만 보고, 다음 실험을 하면서 좁혀 가세요.</p>
+</blockquote>
+<h3 id="6-1-자세히-보기"><a class="anchor" href="#6-1-자세히-보기" aria-hidden="true">#</a>6-1. 자세히 보기</h3>
+<p><figure><img src="img/13-details.png" alt="자세히 보기" width="1096" height="938" loading="lazy" data-zoom><figcaption>자세히 보기</figcaption></figure></p>
+<ol>
+<li><strong>응답별 예측</strong><ul>
+<li><strong>예상 평균 (범위)</strong>: 평균이 있을 법한 범위</li>
+<li><strong>1회 측정 범위</strong>: 한 번 측정했을 때 나올 수 있는 값의 범위 (산포 포함)</li>
+<li><strong>산포 σ</strong>: 같은 조건에서 반복했을 때 흔들리는 정도</li>
+</ul>
+</li>
+<li><strong>다른 선택지</strong>: 한 응답을 더 우선하면 레시피가 어떻게 달라지는지 보여 줍니다. <strong>다음 실험에</strong>를 누르면 그 조건을 다음 실험 목록에 넣습니다.</li>
+<li><strong>모델 신뢰도</strong>: 예측이 실제 결과를 얼마나 잘 맞히는지 스스로 점검한 결과입니다. <strong>95% 구간 포함률</strong>이 크게 낮으면 ⚠와 함께 안내가 나옵니다(실험을 더 하거나 범위를 확인하세요).</li>
+</ol>
+<h3 id="6-2-그래프"><a class="anchor" href="#6-2-그래프" aria-hidden="true">#</a>6-2. 그래프</h3>
+<p><figure><img src="img/14-graphs.png" alt="그래프" width="1046" height="1193" loading="lazy" data-zoom><figcaption>그래프</figcaption></figure></p>
+<ol>
+<li><strong>평균 지도</strong>(청록)와 <strong>산포 지도</strong>(보라)를 나란히 보여 줍니다. 가로·세로축 인자를 고르고, 나머지 인자는 슬라이더로 정합니다. 점은 실제 실험한 조건이고, 초록 점선은 규격 경계입니다.<ul>
+<li>평균이 좋아도 <strong>산포가 큰 영역</strong>(보라가 진한 곳)은 양산에서 결과가 흔들립니다. 두 지도를 함께 보세요.</li>
+<li>산포 지도 오른쪽 위에서 <strong>불확실성</strong>(아직 데이터가 부족한 정도)과 <strong>확률</strong>(규격 만족 확률) 지도로 바꿀 수 있습니다.</li>
+</ul>
+</li>
+<li><strong>인자별 영향</strong>: 추천 레시피에서 인자 하나만 바꿨을 때 평균(청록)과 산포(보라)가 어떻게 변하는지 보여 줍니다.</li>
+</ol>
+<h3 id="6-3-조건-시뮬레이션"><a class="anchor" href="#6-3-조건-시뮬레이션" aria-hidden="true">#</a>6-3. 조건 시뮬레이션</h3>
+<p><figure><img src="img/15-sim.png" alt="조건 시뮬레이션" width="1046" height="271" loading="lazy" data-zoom><figcaption>조건 시뮬레이션</figcaption></figure></p>
+<ol>
+<li>슬라이더나 숫자로 조건을 바꿔 보세요.</li>
+<li>모든 응답의 예상값, 규격 확률, 목표 달성 점수가 바로 계산됩니다. 실험한 범위 밖이면 &quot;외삽&quot; 경고가 붙습니다.</li>
+</ol>
+<hr>
+<h2 id="7-반복하고-마무리하기"><a class="anchor" href="#7-반복하고-마무리하기" aria-hidden="true">#</a>7. 반복하고 마무리하기</h2>
+<p><strong>② 확정 → ① 실험·입력 → ② 결과 확인</strong>을 반복하면 1차, 2차, 3차…로 쌓이며 추천이 점점 정확해집니다.</p>
+<p>멈출 때를 고르는 기준(결정은 사용자가 합니다):</p>
+<ul>
+<li>목표 달성 점수가 충분히 높고, 몇 차수 동안 크게 오르지 않는다</li>
+<li>응답별 규격 확률이 원하는 수준이다</li>
+<li>실험 예산을 다 썼다</li>
+</ul>
+<p>마무리할 때는 <strong>추천 레시피 확인 실험 3회</strong>를 넣어 예측대로 재현되는지 꼭 확인하세요. 끝난 DOE는 <strong>설정</strong> 탭 아래 막대의 상태를 &quot;완료&quot;나 &quot;보관&quot;으로 바꿉니다.</p>
+<blockquote>
+<p><strong>설정 바꾸기</strong>: DOE 이름을 누르거나 <strong>설정</strong> 탭에서 언제든 바꿀 수 있습니다.
+실험 데이터가 있어도 <strong>인자를 추가</strong>할 수 있습니다. 이때 그동안 그 인자를 어떤 값에 고정해 두었는지 &quot;기존 실험 값&quot;을 입력합니다.
+바꾼 내용은 <strong>변경 이력 보기</strong>에 남습니다.</p>
+</blockquote>
+<hr>
+<h2 id="8-함께-쓰기-멤버와-공유"><a class="anchor" href="#8-함께-쓰기-멤버와-공유" aria-hidden="true">#</a>8. 함께 쓰기: 멤버와 공유</h2>
+<p>DOE 머리글 오른쪽의 <strong>멤버·공유</strong>를 누릅니다.</p>
+<p><figure><img src="img/16-members.png" alt="멤버·공유" width="1440" height="900" loading="lazy" data-zoom><figcaption>멤버·공유</figcaption></figure></p>
+<ol>
+<li><strong>멤버 추가</strong>: 함께 일할 사람을 검색해 추가합니다.</li>
+<li><strong>권한</strong>: 멤버마다 바꿀 수 있습니다.</li>
+<li><strong>새로 공유</strong>: 추천 레시피와 지도를 다른 사람·부서에 보여 줍니다(예측 페이지 공유).</li>
+<li><strong>링크 복사</strong>: 공유 링크를 복사해 메신저로 보냅니다. <strong>철회</strong>를 누르면 즉시 볼 수 없게 됩니다.</li>
+</ol>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>권한</th>
+<th>할 수 있는 일</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>소유자</td>
+<td>모든 일, 멤버·공유 관리, 삭제, 소유권 넘기기</td>
+</tr>
+<tr>
+<td>편집자</td>
+<td>설정 변경, 다음 실험 확정, 결과 입력</td>
+</tr>
+<tr>
+<td>실험자</td>
+<td>결과 입력, 못 함 표시, 메모</td>
+</tr>
+<tr>
+<td>열람자</td>
+<td>보기만</td>
+</tr>
+</tbody></table></div>
+<h3 id="예측-페이지-공유하기"><a class="anchor" href="#예측-페이지-공유하기" aria-hidden="true">#</a>예측 페이지 공유하기</h3>
+<p><figure><img src="img/17-share.png" alt="공유 만들기" width="1440" height="900" loading="lazy" data-zoom><figcaption>공유 만들기</figcaption></figure></p>
+<ul>
+<li><strong>대상</strong>: 위쪽 탭에서 <strong>사람 / 부서·사업부 / 전사</strong>를 고르고, 이름이나 사번으로 검색합니다.</li>
+<li><strong>공유 방식</strong>: <strong>스냅샷</strong>(지금 결과로 고정 — 보고·의사결정용, 기본값) 또는 <strong>실시간</strong>(항상 최신 결과)</li>
+<li><strong>권한</strong>: 보기만 / 보기 + 조건 시뮬레이션</li>
+<li><strong>응답 · 예측 모델</strong>: 공유 페이지에서 보여 줄 응답과 예측 모델</li>
+<li><strong>만료일</strong>(선택): 정하지 않으면 철회할 때까지 볼 수 있습니다.</li>
+<li><strong>원본 실험 데이터도 함께 보여주기</strong>: 기본은 꺼져 있습니다(예측 결과만 공유).</li>
+</ul>
+<h3 id="공유받은-사람이-보는-화면"><a class="anchor" href="#공유받은-사람이-보는-화면" aria-hidden="true">#</a>공유받은 사람이 보는 화면</h3>
+<p><figure><img src="img/19-shared.png" alt="공유받은 예측" width="1440" height="900" loading="lazy" data-zoom><figcaption>공유받은 예측</figcaption></figure></p>
+<p>공유받은 사람은 로그인한 뒤 사이드바의 <strong>공유받은 예측</strong>이나 링크로 들어옵니다. 읽기 전용이며, 추천 조건, 예상 평균·산포, 규격 만족 확률, 지도를 볼 수 있습니다.
+공유 대상이 아닌 사람이 링크를 열면 &quot;접근 권한이 없습니다&quot;와 <strong>접근 요청</strong> 버튼이 보입니다.</p>
+<h3 id="doe-메뉴-즐겨찾기--복제--삭제"><a class="anchor" href="#doe-메뉴-즐겨찾기--복제--삭제" aria-hidden="true">#</a>DOE 메뉴 (즐겨찾기 · 복제 · 삭제)</h3>
+<p><figure><img src="img/18-menu.png" alt="DOE 메뉴" width="760" height="520" loading="lazy" data-zoom><figcaption>DOE 메뉴</figcaption></figure></p>
+<p>사이드바의 DOE 이름 옆 <strong>⋯</strong> 을 누르거나 DOE를 <strong>마우스 오른쪽 버튼</strong>으로 누르면 메뉴가 열립니다.</p>
+<ul>
+<li><strong>즐겨찾기</strong>: 목록 맨 위 &quot;즐겨찾기&quot; 묶음에 표시됩니다.</li>
+<li><strong>새 DOE로 복제</strong>: 인자·응답 설정만 복사해 새 DOE를 시작합니다(실험 데이터는 복사하지 않음).</li>
+<li><strong>삭제</strong>(소유자만): 멤버와 공유받은 사람도 더 이상 볼 수 없습니다. 서버에는 일정 기간 보관되므로, 실수로 지웠다면 그 기간 안에 관리자에게 복구를 요청하세요.</li>
+</ul>
+<hr>
+<h2 id="9-화면-꾸미기-사이드바다크-모드"><a class="anchor" href="#9-화면-꾸미기-사이드바다크-모드" aria-hidden="true">#</a>9. 화면 꾸미기: 사이드바·다크 모드</h2>
+<p><figure><img src="img/20-sidebar.png" alt="사이드바 접기·너비 조절" width="720" height="420" loading="lazy" data-zoom><figcaption>사이드바 접기·너비 조절</figcaption></figure></p>
+<ol>
+<li><strong>사이드바 접기</strong>: 표가 넓을 때 사이드바를 접어 작업 공간을 넓힙니다. 단축키 <strong>Ctrl+B</strong>.</li>
+<li><strong>너비 조절</strong>: 사이드바 오른쪽 가장자리를 끌어서 넓히거나 좁힙니다. <strong>두 번 누르면</strong> 기본 너비로 돌아갑니다.</li>
+</ol>
+<p><figure><img src="img/21-sidebar-rail.png" alt="접힌 사이드바" width="720" height="420" loading="lazy" data-zoom><figcaption>접힌 사이드바</figcaption></figure></p>
+<ol>
+<li>접으면 아이콘만 남습니다(펼치기 · 첫 화면 · 새 DOE · 화면 모드). 펼치기 버튼이나 <strong>Ctrl+B</strong>로 다시 펼칩니다.</li>
+</ol>
+<h3 id="다크-모드"><a class="anchor" href="#다크-모드" aria-hidden="true">#</a>다크 모드</h3>
+<p><figure><img src="img/22-dark.png" alt="다크 모드" width="1440" height="900" loading="lazy" data-zoom><figcaption>다크 모드</figcaption></figure></p>
+<ol>
+<li>사이드바 아래 <strong>☀/☾ 버튼</strong>으로 밝은 화면과 어두운 화면을 바꿉니다. 처음에는 컴퓨터(OS) 설정을 따르고, 한 번 바꾸면 이 브라우저에 기억됩니다.</li>
+</ol>
+<blockquote>
+<p>사이드바 너비·접힘·화면 모드는 <strong>이 브라우저에만</strong> 저장됩니다. 다른 PC에서는 다시 정해야 합니다.</p>
+</blockquote>
+<hr>
+<h2 id="10-자주-묻는-질문--용어"><a class="anchor" href="#10-자주-묻는-질문--용어" aria-hidden="true">#</a>10. 자주 묻는 질문 · 용어</h2>
+<p><strong>Q. 엑셀 파일을 올릴 수는 없나요?</strong>
+사내 보안 프로그램 때문에 업로드한 엑셀·CSV 파일은 읽을 수 없습니다. 엑셀에서 <strong>복사 → 앱에서 Ctrl+V</strong> 하세요. 앱에서 엑셀로 가져갈 때는 표 복사(Ctrl+C) 또는 <strong>엑셀 다운로드</strong> 버튼을 쓰면 됩니다.</p>
+<p><strong>Q. 앱이 제안한 값과 다르게 세팅했어요.</strong>
+① 화면의 조건 칸을 실제 값으로 고치세요. 학습에는 <strong>실제 값</strong>을 씁니다.</p>
+<p><strong>Q. 이상한 값이 나왔는데 지워야 하나요?</strong>
+앱은 측정값을 자동으로 지우지 않습니다. 값과 단위를 확인하고, 측정 실수가 확실하면 그 런을 삭제하거나 다시 측정해 고치세요. 고친 값은 이전 값을 덮어쓰지 않고 새 버전으로 기록됩니다.</p>
+<p><strong>Q. 결과를 일부만 넣었는데 다음 실험을 받아도 되나요?</strong>
+됩니다. 빈 실험은 학습에서 빠지고, 다음 제안은 진행 중인 실험과 겹치지 않게 고릅니다.</p>
+<p><strong>Q. 반복 실험은 왜 하나요?</strong>
+같은 조건에서도 결과는 조금씩 흔들립니다(산포). 반복해야 이 흔들림을 알 수 있고, 평균이 좋으면서 <strong>흔들림이 작은(강건한) 레시피</strong>를 찾을 수 있습니다.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>용어</th>
+<th>뜻</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>인자</td>
+<td>바꿔 볼 조건 (온도, 시간, 농도 …)</td>
+</tr>
+<tr>
+<td>응답</td>
+<td>측정 결과 (두께, 균일도 …)</td>
+</tr>
+<tr>
+<td>런</td>
+<td>실험 한 번</td>
+</tr>
+<tr>
+<td>차수</td>
+<td>한 번에 확정한 실험 묶음 (1차, 2차 …). 가져온 기존 데이터는 0차</td>
+</tr>
+<tr>
+<td>반복</td>
+<td>같은 조건을 여러 번 측정하는 것</td>
+</tr>
+<tr>
+<td>산포 (σ)</td>
+<td>같은 조건에서 결과가 흔들리는 정도</td>
+</tr>
+<tr>
+<td>불확실성</td>
+<td>데이터가 부족해서 예측을 아직 확신하지 못하는 정도</td>
+</tr>
+<tr>
+<td>망대 / 망소 / 망목</td>
+<td>클수록 좋음 / 작을수록 좋음 / 목표값에 맞출수록 좋음</td>
+</tr>
+<tr>
+<td>LSL / USL</td>
+<td>규격 하한 / 상한</td>
+</tr>
+<tr>
+<td>목표 달성 점수</td>
+<td>모든 응답의 목표를 함께 만족하는 정도 (100점 만점)</td>
+</tr>
+<tr>
+<td>외삽</td>
+<td>실험한 범위 밖을 예측하는 것. 정확도가 떨어집니다</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="11-단축키-모음"><a class="anchor" href="#11-단축키-모음" aria-hidden="true">#</a>11. 단축키 모음</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>키</th>
+<th>하는 일</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Enter / Shift+Enter</td>
+<td>표에서 아래 / 위 칸으로</td>
+</tr>
+<tr>
+<td>↑ ↓</td>
+<td>결과 표에서 위아래 칸으로</td>
+</tr>
+<tr>
+<td>Ctrl+V</td>
+<td>엑셀에서 복사한 표 붙여넣기 (결과 표·가져오기 표는 칸을 고르지 않아도 됨)</td>
+</tr>
+<tr>
+<td>드래그 · Shift+클릭 → Ctrl+C</td>
+<td>고른 칸만 엑셀로 복사</td>
+</tr>
+<tr>
+<td>Esc</td>
+<td>칸 선택 해제, 창 닫기</td>
+</tr>
+<tr>
+<td>Ctrl+B</td>
+<td>사이드바 접기 / 펼치기</td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><sub>이 매뉴얼의 그림은 <code>frontend/scripts/manual-shots.mjs</code>로 다시 만들 수 있습니다 (README의 &quot;매뉴얼 그림 다시 만들기&quot; 참고).</sub></p>
+
+  </main>
+  <nav class="toc" aria-label="목차">
+    <div class="h">목차</div>
+    <input type="search" placeholder="목차 검색" aria-label="목차 검색" oninput="filterToc(this.value)">
+<a href="#1-시작하기" class="l2" data-id="1-시작하기">1. 시작하기</a>
+<a href="#2-첫-화면-둘러보기" class="l2" data-id="2-첫-화면-둘러보기">2. 첫 화면 둘러보기</a>
+<a href="#3-새-doe-만들기" class="l2" data-id="3-새-doe-만들기">3. 새 DOE 만들기</a>
+<a href="#3-1-표의-칸-설명" class="l3" data-id="3-1-표의-칸-설명">3-1. 표의 칸 설명</a>
+<a href="#3-2-기존-데이터에서-만들기" class="l3" data-id="3-2-기존-데이터에서-만들기">3-2. 기존 데이터에서 만들기</a>
+<a href="#4-첫-실험-정하기" class="l2" data-id="4-첫-실험-정하기">4. 첫 실험 정하기</a>
+<a href="#기존-데이터-가져오기" class="l3" data-id="기존-데이터-가져오기">기존 데이터 가져오기</a>
+<a href="#5-실험-데이터-입력" class="l2" data-id="5-실험-데이터-입력">5. 실험 데이터 입력</a>
+<a href="#5-1-실험-시트-인쇄" class="l3" data-id="5-1-실험-시트-인쇄">5-1. 실험 시트 인쇄</a>
+<a href="#5-2-결과-넣기-직접-입력-또는-엑셀-붙여넣기" class="l3" data-id="5-2-결과-넣기-직접-입력-또는-엑셀-붙여넣기">5-2. 결과 넣기 (직접 입력 또는 엑셀 붙여넣기)</a>
+<a href="#5-3-못-한-실험-표시" class="l3" data-id="5-3-못-한-실험-표시">5-3. 못 한 실험 표시</a>
+<a href="#5-4-표의-일부만-복사하기" class="l3" data-id="5-4-표의-일부만-복사하기">5-4. 표의 일부만 복사하기</a>
+<a href="#6-능동학습-결과" class="l2" data-id="6-능동학습-결과">6. 능동학습 결과</a>
+<a href="#6-1-자세히-보기" class="l3" data-id="6-1-자세히-보기">6-1. 자세히 보기</a>
+<a href="#6-2-그래프" class="l3" data-id="6-2-그래프">6-2. 그래프</a>
+<a href="#6-3-조건-시뮬레이션" class="l3" data-id="6-3-조건-시뮬레이션">6-3. 조건 시뮬레이션</a>
+<a href="#7-반복하고-마무리하기" class="l2" data-id="7-반복하고-마무리하기">7. 반복하고 마무리하기</a>
+<a href="#8-함께-쓰기-멤버와-공유" class="l2" data-id="8-함께-쓰기-멤버와-공유">8. 함께 쓰기: 멤버와 공유</a>
+<a href="#예측-페이지-공유하기" class="l3" data-id="예측-페이지-공유하기">예측 페이지 공유하기</a>
+<a href="#공유받은-사람이-보는-화면" class="l3" data-id="공유받은-사람이-보는-화면">공유받은 사람이 보는 화면</a>
+<a href="#doe-메뉴-즐겨찾기--복제--삭제" class="l3" data-id="doe-메뉴-즐겨찾기--복제--삭제">DOE 메뉴 (즐겨찾기 · 복제 · 삭제)</a>
+<a href="#9-화면-꾸미기-사이드바다크-모드" class="l2" data-id="9-화면-꾸미기-사이드바다크-모드">9. 화면 꾸미기: 사이드바·다크 모드</a>
+<a href="#다크-모드" class="l3" data-id="다크-모드">다크 모드</a>
+<a href="#10-자주-묻는-질문--용어" class="l2" data-id="10-자주-묻는-질문--용어">10. 자주 묻는 질문 · 용어</a>
+<a href="#11-단축키-모음" class="l2" data-id="11-단축키-모음">11. 단축키 모음</a>
+    <div class="none" hidden>찾는 항목이 없습니다</div>
+  </nav>
+</div>
+<button class="to-top" type="button" aria-label="맨 위로" onclick="scrollTo({ top: 0 })">↑</button>
+<div class="zoom" onclick="this.classList.remove('open')"><img alt=""></div>
+<script>
+  function toggleTheme() {
+    const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem("redo.theme", t); } catch (e) {}
+  }
+  // 목차: 지금 읽고 있는 절을 강조하고, 목차 안에서도 보이게 스크롤
+  const links = [...document.querySelectorAll("nav.toc a[data-id]")];
+  const byId = new Map(links.map((a) => [a.dataset.id, a]));
+  const heads = links.map((a) => document.getElementById(a.dataset.id)).filter(Boolean);
+  let current = null;
+  function mark() {
+    const y = 90;
+    let h = heads[0];
+    for (const el of heads) { if (el.getBoundingClientRect().top - y <= 0) h = el; else break; }
+    if (h && h.id !== current) {
+      current = h.id;
+      links.forEach((a) => a.classList.toggle("on", a.dataset.id === current));
+      const a = byId.get(current);
+      const nav = document.querySelector("nav.toc");
+      if (a && nav.scrollHeight > nav.clientHeight) {
+        const top = a.offsetTop - nav.clientHeight / 2;
+        nav.scrollTo({ top: Math.max(0, top) });
+      }
+    }
+    document.querySelector(".to-top").classList.toggle("show", scrollY > 600);
+  }
+  addEventListener("scroll", mark, { passive: true });
+  addEventListener("load", mark);
+  mark();
+  // 좁은 화면에서 목차 항목을 누르면 목차를 닫는다
+  links.forEach((a) => a.addEventListener("click", () => document.querySelector("nav.toc").classList.remove("open")));
+  // 목차 검색
+  function filterToc(q) {
+    q = q.trim().toLowerCase();
+    let n = 0;
+    links.forEach((a) => { const ok = !q || a.textContent.toLowerCase().includes(q); a.hidden = !ok; if (ok) n++; });
+    document.querySelector("nav.toc .none").hidden = n > 0;
+  }
+  // 그림 크게 보기 (Esc로 닫기)
+  const zoom = document.querySelector(".zoom");
+  document.querySelectorAll("img[data-zoom]").forEach((img) => img.addEventListener("click", () => { zoom.querySelector("img").src = img.src; zoom.classList.add("open"); }));
+  addEventListener("keydown", (e) => { if (e.key === "Escape") zoom.classList.remove("open"); });
+</script>
+</body>
+</html>

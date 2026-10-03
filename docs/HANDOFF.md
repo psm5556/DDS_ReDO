@@ -6,10 +6,10 @@ claude.ai 대화에서 만든 첫 구현을 Claude Code로 이어서 개발하�
 ## 현재 상태 요약
 | 영역 | 상태 |
 |---|---|
-| 백엔드 (FastAPI) | 구현 완료 + 다목적 최적화, `pytest` 39개 통과 |
+| 백엔드 (FastAPI) | 구현 완료 + 다목적 최적화, `pytest` 40개 통과 |
 | 모델링 (GP, 획득, 검증) | 구현 완료, 합성 데이터로 검증 |
 | TabPFN 어댑터 | **코드만 작성, 실제 실행 미검증** (가중치 없는 환경에서 작성) |
-| 프론트엔드 (React) | 전 화면 작성·브라우저 점검 완료, `npm run build` 통과, E2E 47개 통과 |
+| 프론트엔드 (React) | 전 화면 작성·브라우저 점검 완료, `npm run build` 통과, E2E 49개 통과 |
 | 사내 로그인 연계 | 구조만 준비 (`backend/app/auth/corporate.py`), 사양 대기 |
 
 ## 남은 작업 (우선순위 순)
@@ -124,6 +124,13 @@ claude.ai 대화에서 만든 첫 구현을 Claude Code로 이어서 개발하�
    - frontend/src/design/tokens.css: 토큰 단일 원본(앱도 이 파일을 먼저 불러옴, styles.css에서 분리)
    - frontend/src/design/kit.css: 프레임워크 무관 컴포넌트 CSS(앱과 같은 값, 일반적인 클래스 이름). 앱 스타일을 바꾸면 함께 맞출 것
    - docs/design/preview.html(+ preview-light/dark.png): 키트 두 파일만으로 그리는 미리보기
+2-9. ~~HTML 사용 매뉴얼 + 보안 수정~~ (2026-10-03)
+   - 매뉴얼 원본은 docs/USER_MANUAL.md 하나. scripts/build-manual.mjs(marked)가 public/manual/index.html 생성(npm run build 전에 자동)
+     - 오른쪽 목차가 따라다니며 현재 절 강조, 목차 검색, 그림 크게 보기(그림 크기 고정 → 목차 이동 위치 정확), 다크 모드(앱과 같은 설정), 인쇄
+     - 그림은 frontend/public/manual/img 한 곳 (MD·README·DESIGN.md도 여기를 가리킴)
+   - 앱: 사이드바 아래 📖(사용 매뉴얼, 새 창), DOE 머리글 '도움말' = 지금 탭에 맞는 절로 (src/manual.ts openManual)
+   - 보안: 운영 모드 SPA 정적 파일 제공에서 dist 밖 경로(%2e%2e 등)로 파일을 읽을 수 있던 문제 수정 (main.py, 회귀 테스트 추가)
+   - 테스트: pytest 40개, E2E 49개 (manual.spec.ts)
 3. 주요 화면 사용성 점검 (CLAUDE.md 7.6절): 실제 엔지니어 3~5명 대상 테스트 계획 작성.
 4. 사내 개발 전환 시 작업 (아래 "프로토타입 단순화" 해소).
 

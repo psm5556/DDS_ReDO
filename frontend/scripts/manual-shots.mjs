@@ -10,7 +10,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const BASE = process.env.MANUAL_BASE ?? "http://localhost:5191";
-const OUT = resolve(dirname(fileURLToPath(import.meta.url)), "../../docs/manual/img");
+const OUT = resolve(dirname(fileURLToPath(import.meta.url)), "../public/manual/img");
 mkdirSync(OUT, { recursive: true });
 const H = { "X-Requested-With": "ReDO" };
 const W = 1440, HGT = 900;

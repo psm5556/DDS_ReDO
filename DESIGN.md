@@ -8,11 +8,11 @@
 | ![밝은 화면](docs/design/preview-light.png) | ![어두운 화면](docs/design/preview-dark.png) |
 
 실제 앱 화면은 [사용 매뉴얼](docs/USER_MANUAL.md)에 있습니다. 대표 화면은 다음과 같습니다.
-- [첫 화면](docs/manual/img/02-home.png)
-- [설정 폼](docs/manual/img/03-new-doe.png)
-- [편집 표](docs/manual/img/07-step1.png)
-- [결과 요약](docs/manual/img/12-step2.png)
-- [다크 모드](docs/manual/img/22-dark.png)
+- [첫 화면](frontend/public/manual/img/02-home.png)
+- [설정 폼](frontend/public/manual/img/03-new-doe.png)
+- [편집 표](frontend/public/manual/img/07-step1.png)
+- [결과 요약](frontend/public/manual/img/12-step2.png)
+- [다크 모드](frontend/public/manual/img/22-dark.png)
 
 ---
 

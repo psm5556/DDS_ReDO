@@ -440,3 +440,18 @@ def test_export_runs_xlsx(client_for):
     assert wb["DOE 설정"]["B1"].value == "엑셀 다운로드"
     # 접근 권한 없는 사람은 존재도 모름
     assert client_for("E2001").get(f"/api/projects/{pid}/runs.xlsx").status_code == 404
+
+
+def test_spa_static_does_not_serve_files_outside_dist(seeded):
+    """빌드된 프론트엔드 제공 경로에서 dist 밖 파일(.env, 소스 등)을 읽을 수 없어야 한다 (경로 탈출)."""
+    from pathlib import Path
+    from fastapi.testclient import TestClient
+    from app.main import app
+    dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    if not (dist / "index.html").is_file():
+        pytest.skip("frontend/dist 없음 (npm run build 후 실행)")
+    with TestClient(app) as c:
+        for raw in ["/%2e%2e/%2e%2e/backend/requirements.txt", "/..%2f..%2fbackend%2frequirements.txt", "/%2e%2e%2f%2e%2e%2fbackend%2frequirements.txt"]:
+            r = c.get(raw)
+            assert "fastapi" not in r.text.lower(), raw
+        assert c.get("/manual/index.html").status_code == 200 or not (dist / "manual" / "index.html").is_file()

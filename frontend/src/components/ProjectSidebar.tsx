@@ -1,9 +1,10 @@
-import { ChevronDown, ChevronRight, Home, Inbox, LogOut, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Share2, Star, Sun, Users } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Home, Inbox, LogOut, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Share2, Star, Sun, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api, del, get, post } from "../api";
 import { useAuth } from "../auth";
 import { useTheme } from "../theme";
+import { openManual } from "../manual";
 import { ROLE_LABEL } from "../format";
 import { allowedSteps, autoStep, nextAction, notifyProjectsChanged, PROJECTS_CHANGED, STEPS } from "../guide/steps";
 import { useToast } from "../toast";
@@ -179,6 +180,7 @@ export function ProjectSidebar({ layout }: { layout?: SideLayout }) {
         <Link className="icon-btn rail-btn" to="/" aria-label="첫 화면" title="첫 화면"><Home size={18} /></Link>
         <Link className="icon-btn rail-btn primary" to="/new" aria-label="새 DOE 만들기" title="새 DOE 만들기"><Plus size={18} /></Link>
         <span className="grow" />
+        <button className="icon-btn rail-btn" onClick={() => openManual()} aria-label="사용 매뉴얼" title="사용 매뉴얼 (새 창)"><BookOpen size={18} /></button>
         <button className="icon-btn rail-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button>
         {user && <span className="avatar rail-me" title={`${user.name} · ${user.department}`}>{user.name.slice(0, 1)}</span>}
       </aside>
@@ -246,6 +248,7 @@ export function ProjectSidebar({ layout }: { layout?: SideLayout }) {
         <div className="side-me">
           <span className="avatar" aria-hidden="true">{user.name.slice(0, 1)}</span>
           <span className="who"><b>{user.name}</b><small>{user.department} · {user.business_unit}</small></span>
+          <button className="icon-btn" onClick={() => openManual()} aria-label="사용 매뉴얼" title="사용 매뉴얼 (새 창)"><BookOpen size={15} /></button>
           <button className="icon-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
           <button className="icon-btn" title="로그아웃" aria-label="로그아웃"
             onClick={async () => { await post("/api/auth/logout").catch(() => {}); await refresh(); nav("/login"); }}>
