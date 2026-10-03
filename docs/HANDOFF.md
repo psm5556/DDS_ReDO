@@ -154,6 +154,20 @@ claude.ai 대화에서 만든 첫 구현을 Claude Code로 이어서 개발하�
      - 실제 사내 Ollama 모델로 도구 선택 품질 점검 (도구 23개는 작은 모델에 많을 수 있음 → 필요하면 화면별로 도구를 나눠 주기)
      - 응답 스트리밍
    - 테스트: pytest 59개(test_assistant.py 19), E2E 53개(conversa.spec.ts 4)
+2-11. ~~DDS Conversa 대화 기록 계정별 저장 + MCP 켜고 끄기~~ (2026-10-03)
+   - 대화 기록: assistant_conversations · assistant_messages (본인만, 남의 것은 404)
+     - POST /api/assistant/chat {message, conversation_id?} — 지난 대화(최근 30개, 오류 메시지 제외)를 서버에서 읽어 LLM 문맥으로. 사용자 말은 먼저 저장, LLM 오류도 error 메시지로 저장
+     - GET /api/assistant/conversations(최근 순) · GET/PATCH/DELETE /{id}, POST /api/assistant/messages/{id}/cancel
+     - confirm에 message_id → 카드 state(done/error) + "✓ 실행했습니다" 메시지 저장, 이미 처리한 카드는 400. 10분 지난 카드는 state "expired"로 내려줌
+     - 화면: 머리글 '대화 목록'(검색·열기·이름 바꾸기·삭제 2단계)과 '새 대화'. 마지막으로 보던 대화는 localStorage `redo.conversa.current.<user_key>`로 기억(내용은 서버). 늦게 온 응답이 화면을 덮지 않게 seq 가드
+   - MCP 스위치: REDO_MCP_ENABLED(기본 true). false면 /mcp 404, 토큰 발급 403, Bearer 인증 자체 무시(이미 만든 토큰도 막힘), 'MCP 연결' 버튼 숨김(status.mcp.enabled일 때만). 사용자가 한때 숨김을 요청했다가 다시 켜 두라고 함
+   - 왼쪽 사이드바의 DDS Conversa 버튼 제거(사용자 요청) — 오른쪽 아이콘 막대·Ctrl+J로 연다
+   - DOE 설정 '실험 계획' 표 칸 너비 조정(colgroup, .plan-grid)
+   - DOE 설정 저장 막대 정리(사용자 요청): 평소에는 [설정 저장]만
+     - 상태(진행 중·완료·보관) 선택은 사이드바 ⋯ 메뉴로 이동(ProjectMenu: 완료로 표시·진행 중으로 되돌리기·보관·보관 해제, 편집자 이상)
+     - '변경 사유'는 실험 데이터가 있는 DOE에서 인자·응답·실험 계획을 바꿨을 때만 표시(WizardPage: 불러온 설정과 toConfig() 비교, 저장 후 새 기준). 이름·설명만 바꾸면 묻지 않음
+     - E2E settings-status.spec.ts 4개 (전체 E2E 58개, pytest 63개)
+   - 테스트: pytest 63개(test_assistant.py 23), E2E 54개(conversa.spec.ts 5)
 3. 주요 화면 사용성 점검 (CLAUDE.md 7.6절): 실제 엔지니어 3~5명 대상 테스트 계획 작성.
 4. 사내 개발 전환 시 작업 (아래 "프로토타입 단순화" 해소).
 

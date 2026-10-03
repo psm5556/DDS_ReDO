@@ -366,3 +366,7 @@ tbody tr:hover td { background-color: var(--row-hover); }
 :root[data-theme="dark"] .modal-back { background: rgb(0 0 0 / 0.55); }
 :root[data-theme="dark"] .toast { box-shadow: var(--shadow-card-md), 0 0 0 1px var(--line); }
 :root[data-theme="dark"] .print-sheet, :root[data-theme="dark"] .print-sheet * { color-scheme: light; }
+
+/* DOE 설정 > 실험 계획 한 줄: 칸 너비는 colgroup으로 고정 (좁은 화면에서는 가로 스크롤) */
+.plan-grid { table-layout: fixed; min-width: 760px; }
+.plan-grid select { width: 100%; text-overflow: ellipsis; }

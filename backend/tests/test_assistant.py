@@ -63,6 +63,18 @@ def llm_on(monkeypatch):
     return fake
 
 
+@pytest.fixture
+def mcp_on(monkeypatch):
+    monkeypatch.setattr(get_settings(), "mcp_enabled", True)
+
+
+def _say(c, text, **kw):
+    """대화 한 번. 응답의 마지막 메시지(도우미 답)를 돌려준다."""
+    r = c.post("/api/assistant/chat", json={"message": text, **kw})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 # ---------------------------------------------------------------- 1단계: API 설명서·런 ID·미리 보기
 def test_every_api_has_korean_summary_and_stable_operation_id(seeded):
     names = {r.name for r in app.routes if isinstance(r, APIRoute) and r.path.startswith("/api")}
@@ -233,16 +245,16 @@ def test_status_and_chat_disabled_without_llm(client_for):
     c = client_for("E1001")
     st = c.get("/api/assistant/status").json()
     assert st["enabled"] is False and st["title"] == "DDS Conversa" and "REDO_LLM_BASE_URL" in st["message"]
-    assert c.post("/api/assistant/chat", json={"messages": [{"role": "user", "content": "안녕"}]}).status_code == 503
+    assert c.post("/api/assistant/chat", json={"message": "안녕"}).status_code == 503
 
 
 def test_chat_read_tool_then_answer(client_for, llm_on):
     c = client_for("E1001")
     pid = _project(c, "대화 읽기")
     llm_on.replies = [LLMReply("", [ToolCall("1", "get_doe", {})]), LLMReply("온도·시간 2개 인자입니다.")]
-    r = c.post("/api/assistant/chat", json={"messages": [{"role": "user", "content": "이 DOE 알려줘"}], "project_id": pid, "path": f"/projects/{pid}/step/1"})
-    assert r.status_code == 200, r.text
-    assert r.json()["reply"] == "온도·시간 2개 인자입니다." and r.json()["pending"] is None
+    r = _say(c, "이 DOE 알려줘", project_id=pid, path=f"/projects/{pid}/step/1")
+    am = r["messages"][-1]
+    assert am["content"] == "온도·시간 2개 인자입니다." and am["pending"] is None
     sys_msg = llm_on.seen[0][0]["content"]
     assert "지금 보고 있는 DOE: 대화 읽기" in sys_msg and "① 실험 데이터 입력" in sys_msg
     tool_msg = llm_on.seen[1][-1]
@@ -254,18 +266,24 @@ def test_chat_write_needs_user_confirmation(client_for, llm_on):
     pid = _project(c, "대화 쓰기")
     code = c.get(f"/api/projects/{pid}/runs").json()[0]["code"]
     llm_on.replies = [LLMReply("저장할게요", [ToolCall("1", "enter_results", {"rows": [{"run": code, "values": {"수율": 81}}], "confirm": True})])]
-    r = c.post("/api/assistant/chat", json={"messages": [{"role": "user", "content": f"{code} 수율 81"}], "project_id": pid}).json()
-    p = r["pending"]
+    r = _say(c, f"{code} 수율 81", project_id=pid)
+    card = r["messages"][-1]
+    p = card["pending"]
     assert p and p["tool"] == "enter_results" and not p["danger"] and "81" in " ".join(p["lines"])
     assert c.get(f"/api/projects/{pid}/runs").json()[0]["values"]["yield"] is None  # 아직 저장 안 됨
     # 다른 사람은 이 카드로 실행할 수 없다
     assert client_for("E1002").post("/api/assistant/confirm", json={"token": p["token"]}).status_code == 400
     # 위·변조된 카드는 거부
     assert c.post("/api/assistant/confirm", json={"token": p["token"][:-3] + "abc"}).status_code == 400
-    ok = c.post("/api/assistant/confirm", json={"token": p["token"]})
+    ok = c.post("/api/assistant/confirm", json={"token": p["token"], "message_id": card["id"]})
     assert ok.status_code == 200, ok.text
+    assert ok.json()["card"]["state"] == "done" and ok.json()["message"]["content"].startswith("✓ 실행했습니다")
     assert c.get(f"/api/projects/{pid}/runs").json()[0]["values"]["yield"] == 81
     assert c.post("/api/assistant/confirm", json={"token": p["token"]}).status_code == 400  # 두 번 실행 불가
+    assert c.post("/api/assistant/confirm", json={"token": p["token"], "message_id": card["id"]}).status_code == 400
+    # 처리 결과가 대화 기록에 남는다
+    msgs = c.get(f"/api/assistant/conversations/{r['conversation']['id']}").json()["messages"]
+    assert [m["role"] for m in msgs] == ["user", "assistant", "assistant"] and msgs[1]["state"] == "done"
     with SessionLocal() as db:
         logs = db.query(AuditLog).filter(AuditLog.entity_id == pid, AuditLog.action == "results.save").all()
         assert logs and logs[-1].detail.get("via") == "assistant"
@@ -276,7 +294,7 @@ def test_chat_danger_needs_two_confirmations(client_for, llm_on):
     pid = _project(c, "대화 위험 작업")
     code = c.get(f"/api/projects/{pid}/runs").json()[0]["code"]
     llm_on.replies = [LLMReply("", [ToolCall("1", "delete_run", {"run": code})])]
-    p = c.post("/api/assistant/chat", json={"messages": [{"role": "user", "content": f"{code} 지워줘"}], "project_id": pid}).json()["pending"]
+    p = _say(c, f"{code} 지워줘", project_id=pid)["messages"][-1]["pending"]
     assert p["danger"] and p["warning"]
     n = len(c.get(f"/api/projects/{pid}/runs").json())
     r = c.post("/api/assistant/confirm", json={"token": p["token"]})
@@ -291,8 +309,91 @@ def test_chat_ignores_project_context_without_access(client_for, llm_on):
     owner = client_for("E1001")
     pid = _project(owner, "남의 DOE 문맥")
     llm_on.replies = [LLMReply("네")]
-    r = client_for("E2001").post("/api/assistant/chat", json={"messages": [{"role": "user", "content": "이거"}], "project_id": pid})
-    assert r.status_code == 200 and "남의 DOE 문맥" not in llm_on.seen[0][0]["content"]
+    _say(client_for("E2001"), "이거", project_id=pid)
+    assert "남의 DOE 문맥" not in llm_on.seen[0][0]["content"]
+
+
+# ---------------------------------------------------------------- 대화 기록 (계정별 저장)
+def test_conversation_is_saved_and_continued(client_for, llm_on):
+    c = client_for("E1001")
+    llm_on.replies = [LLMReply("첫 답"), LLMReply("둘째 답")]
+    r1 = _say(c, "첫 질문입니다\n두 번째 줄")
+    cid = r1["conversation"]["id"]
+    assert r1["conversation"]["title"] == "첫 질문입니다"
+    r2 = _say(c, "이어서 질문", conversation_id=cid)
+    assert r2["conversation"]["id"] == cid and r2["conversation"]["message_count"] == 4
+    # 두 번째 요청에는 서버에 저장된 지난 대화가 문맥으로 들어간다
+    sent = [m["content"] for m in llm_on.seen[1] if m["role"] in ("user", "assistant")]
+    assert sent == ["첫 질문입니다\n두 번째 줄", "첫 답", "이어서 질문"]
+    # 목록·불러오기·이름 바꾸기
+    lst = c.get("/api/assistant/conversations").json()
+    assert lst[0]["id"] == cid
+    got = c.get(f"/api/assistant/conversations/{cid}").json()
+    assert [m["content"] for m in got["messages"]] == ["첫 질문입니다\n두 번째 줄", "첫 답", "이어서 질문", "둘째 답"]
+    assert c.patch(f"/api/assistant/conversations/{cid}", json={"title": "공정 문의"}).json()["title"] == "공정 문의"
+    # 새 대화는 따로
+    llm_on.replies = [LLMReply("새 답")]
+    r3 = _say(c, "새 대화")
+    assert r3["conversation"]["id"] != cid and len(llm_on.seen[2]) == 2  # 시스템 + 이번 질문만
+    assert c.get("/api/assistant/conversations").json()[0]["id"] == r3["conversation"]["id"]  # 최근 순
+    # 삭제
+    assert c.delete(f"/api/assistant/conversations/{cid}").status_code == 200
+    assert c.get(f"/api/assistant/conversations/{cid}").status_code == 404
+    ids = [x["id"] for x in c.get("/api/assistant/conversations").json()]
+    assert cid not in ids and r3["conversation"]["id"] in ids
+
+
+def test_conversations_are_private_to_each_account(client_for, llm_on):
+    owner, other = client_for("E1001"), client_for("E1002")
+    llm_on.replies = [LLMReply("답")]
+    cid = _say(owner, "내 비밀 대화")["conversation"]["id"]
+    mid = owner.get(f"/api/assistant/conversations/{cid}").json()["messages"][0]["id"]
+    assert all(x["id"] != cid for x in other.get("/api/assistant/conversations").json())
+    assert other.get(f"/api/assistant/conversations/{cid}").status_code == 404
+    assert other.patch(f"/api/assistant/conversations/{cid}", json={"title": "x"}).status_code == 404
+    assert other.delete(f"/api/assistant/conversations/{cid}").status_code == 404
+    assert other.post("/api/assistant/chat", json={"message": "끼어들기", "conversation_id": cid}).status_code == 404
+    assert other.post(f"/api/assistant/messages/{mid}/cancel").status_code == 404
+    assert owner.get(f"/api/assistant/conversations/{cid}").json()["conversation"]["message_count"] == 2
+
+
+def test_cancel_card_and_llm_error_are_saved(client_for, llm_on, monkeypatch):
+    c = client_for("E1001")
+    pid = _project(c, "대화 취소")
+    code = c.get(f"/api/projects/{pid}/runs").json()[0]["code"]
+    llm_on.replies = [LLMReply("", [ToolCall("1", "enter_results", {"rows": [{"run": code, "values": {"수율": 50}}]})])]
+    r = _say(c, f"{code} 수율 50", project_id=pid)
+    card = r["messages"][-1]
+    assert c.post(f"/api/assistant/messages/{card['id']}/cancel").json()["state"] == "cancelled"
+    assert c.post("/api/assistant/confirm", json={"token": card["pending"]["token"], "message_id": card["id"]}).status_code == 400
+    assert c.get(f"/api/projects/{pid}/runs").json()[0]["values"]["yield"] is None
+    # LLM 오류도 대화에 남고(빨간 말풍선), 다음 요청 문맥에서는 빠진다
+    from app.assistant.llm import LLMError
+
+    def boom(*a, **k):
+        raise LLMError("사내 LLM 서버에 연결하지 못했습니다.")
+    monkeypatch.setattr(llm_on, "chat", boom)
+    r2 = _say(c, "다시", conversation_id=r["conversation"]["id"])
+    assert r2["messages"][-1]["error"] is True
+    monkeypatch.undo()
+    s = get_settings()
+    monkeypatch.setattr(s, "llm_base_url", "http://fake-ollama:11434")
+    monkeypatch.setattr(s, "llm_model", "qwen-test")
+    fake = FakeLLM([LLMReply("이제 됩니다")])
+    monkeypatch.setattr(agent, "make_client", lambda s=None: fake)
+    _say(c, "한 번 더", conversation_id=r["conversation"]["id"])
+    assert all("연결하지 못했습니다" not in (m.get("content") or "") for m in fake.seen[0])
+
+
+def test_mcp_on_by_default_and_can_be_turned_off(client_for, monkeypatch):
+    from fastapi.testclient import TestClient
+    c = client_for("E1001")
+    assert get_settings().mcp_enabled is True and c.get("/api/assistant/status").json()["mcp"]["enabled"] is True
+    monkeypatch.setattr(get_settings(), "mcp_enabled", False)
+    assert c.get("/api/assistant/status").json()["mcp"]["enabled"] is False
+    assert c.post("/api/me/tokens", json={"name": "x"}).status_code == 403
+    m = TestClient(app)
+    assert m.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"}, headers={"Authorization": "Bearer redo_x"}).status_code == 404
 
 
 # ---------------------------------------------------------------- MCP · 토큰
@@ -301,7 +402,7 @@ def _rpc(c, token, method, params=None, id_=1):
                   headers={"Authorization": f"Bearer {token}"})
 
 
-def test_mcp_with_personal_token(client_for):
+def test_mcp_with_personal_token(client_for, mcp_on):
     from fastapi.testclient import TestClient
     c = client_for("E1001")
     pid = _project(c, "MCP 테스트")
@@ -349,7 +450,7 @@ def test_mcp_with_personal_token(client_for):
     assert m.get("/api/projects", headers={"Authorization": f"Bearer {raw}"}).status_code == 401
 
 
-def test_token_of_deactivated_user_is_rejected(client_for):
+def test_token_of_deactivated_user_is_rejected(client_for, mcp_on, monkeypatch):
     from fastapi.testclient import TestClient
     c = client_for("E1002")
     raw = c.post("/api/me/tokens", json={"name": "x"}).json()["token"]
@@ -361,6 +462,10 @@ def test_token_of_deactivated_user_is_rejected(client_for):
         db.commit()
     try:
         assert _rpc(m, raw, "ping").status_code == 401
+        u_ok = client_for("E1001").post("/api/me/tokens", json={"name": "y"}).json()["token"]
+        assert m.get("/api/projects", headers={"Authorization": f"Bearer {u_ok}"}).status_code == 200
+        monkeypatch.setattr(get_settings(), "mcp_enabled", False)  # 기능을 끄면 이미 만든 토큰도 막힌다
+        assert m.get("/api/projects", headers={"Authorization": f"Bearer {u_ok}"}).status_code == 401
     finally:
         with SessionLocal() as db:
             u = db.query(User).filter(User.user_key == "E1002").one()

@@ -217,3 +217,26 @@ class AssistantAction(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     tool: Mapped[str] = mapped_column(String(60))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AssistantConversation(Base):
+    """DDS Conversa 대화 (계정마다 따로 저장, 본인만 볼 수 있음)"""
+    __tablename__ = "assistant_conversations"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(120), default="새 대화")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AssistantMessage(Base):
+    """대화의 한 마디. 확인 카드(pending)와 그 처리 결과(state: done/cancelled/error)도 함께 남는다."""
+    __tablename__ = "assistant_messages"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("assistant_conversations.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(16))  # user | assistant
+    content: Mapped[str] = mapped_column(Text, default="")
+    pending: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    error: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

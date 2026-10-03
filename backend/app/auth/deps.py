@@ -22,8 +22,8 @@ def get_auth_provider() -> AuthProvider:
 
 def _authenticate(request: Request, db: Session) -> User | None:
     # 개인 토큰(Bearer)이 있으면 그것만 본다 — 잘못된 토큰이면 세션이 있어도 거부
-    if bearer_of(request):
-        return user_from_bearer(request, db)
+    if bearer_of(request):  # 개인 토큰은 앱 밖 AI(MCP) 연결용 — 그 기능이 꺼져 있으면 토큰도 쓸 수 없다
+        return user_from_bearer(request, db) if get_settings().mcp_enabled else None
     return get_auth_provider().authenticate(request, db)
 
 

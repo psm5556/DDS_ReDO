@@ -42,7 +42,7 @@
 REDO_LLM_BASE_URL=http://ollama.사내도메인:11434   # Ollama 주소
 REDO_LLM_MODEL=qwen2.5:14b                         # 도구 호출(tools)을 지원하는 모델
 ```
-서버를 다시 시작하면 사이드바의 **DDS Conversa**(Ctrl+J)가 켜집니다. 연결 상태는 `GET /api/assistant/status`에서 확인합니다.
+서버를 다시 시작하면 화면 오른쪽의 **DDS Conversa**(✦ 아이콘 막대, Ctrl+J)가 켜집니다. 연결 상태는 `GET /api/assistant/status`에서 확인합니다.
 OpenAI 호환 게이트웨이를 쓰면 `REDO_LLM_PROVIDER=openai`(+ 필요하면 `REDO_LLM_API_KEY`)로 바꿉니다.
 
 **안전장치**
@@ -53,12 +53,13 @@ OpenAI 호환 게이트웨이를 쓰면 `REDO_LLM_PROVIDER=openai`(+ 필요하�
 - 쓰기는 **확인 카드 → [실행]**, 위험 작업은 **"정말 실행할까요?" 재확인**까지 거쳐야 실행됩니다(서버가 강제).
 - 확인 카드는 서명된 토큰입니다. 10분 동안만 유효하고, 본인만, 한 번만 실행할 수 있습니다. LLM은 이 단계를 건너뛸 수 없습니다.
 - 감사 로그에 `via=assistant`(화면 대화), `via=mcp`(MCP), `via=api`(개인 토큰)로 남습니다.
+- **대화 기록은 계정별로 서버에 저장**됩니다(`assistant_conversations`·`assistant_messages`). 창의 '대화 목록'에서 언제든 다시 불러 이어 갈 수 있고, 본인만 볼 수 있습니다. 확인 카드의 실행·취소 결과도 함께 남습니다.
 
-**MCP 서버** — 사내 MCP 클라이언트(에이전트·IDE)에서 같은 도구를 씁니다.
+**MCP 서버** — 사내 MCP 클라이언트(에이전트·IDE)에서 같은 도구를 씁니다. `REDO_MCP_ENABLED=false`로 끄면 `/mcp`는 404, 개인 토큰 발급·사용(이미 만든 토큰 포함)이 막히고 화면의 'MCP 연결' 버튼도 사라집니다.
 - 주소: `http(s)://<앱 주소>/mcp` (Streamable HTTP, JSON-RPC)
 - 인증: 개인 토큰 `Authorization: Bearer redo_…`. DDS Conversa 창의 🔗 **MCP 연결**에서 발급·폐기하며, 설정 예시를 복사할 수 있습니다.
 - 쓰기 도구는 `confirm=true`, 위험 도구는 `confirm_again=true`까지 줘야 실행됩니다. 도구 annotations(`readOnlyHint`/`destructiveHint`)로 MCP 호스트가 승인 화면을 띄웁니다.
-- LLM 등록과 상관없이 쓸 수 있습니다(`REDO_MCP_ENABLED=false`로 끔).
+- LLM 등록과 상관없이 쓸 수 있습니다.
 
 **API 설명서**: 모든 API에 한국어 요약·설명과 고정 operationId(함수 이름)가 붙어 있습니다 → `/docs`, `/openapi.json`.
 결과 저장은 런 ID(`run_code: "1차-03"`)로 지정할 수 있고, `?dry_run=true`로 저장 전 미리 보기를 할 수 있습니다.
@@ -126,7 +127,7 @@ cd frontend; npm run manual:html                       # docs/USER_MANUAL.md →
 | `REDO_LLM_PROVIDER` | ollama | ollama / openai(OpenAI 호환 게이트웨이) |
 | `REDO_LLM_API_KEY` | | 게이트웨이 키 (필요할 때만) |
 | `REDO_LLM_NUM_CTX` | 16384 | Ollama 문맥 길이 |
-| `REDO_MCP_ENABLED` | true | MCP 서버(/mcp) |
+| `REDO_MCP_ENABLED` | true | 앱 밖 AI(MCP) 연결: /mcp · 개인 토큰 · 'MCP 연결' 버튼 |
 | `REDO_TABPFN_ENABLED` | false | TabPFN 기능 플래그 |
 | `REDO_TABPFN_MODEL_PATH` | | 서버에 미리 받아 둔 가중치 파일 경로 |
 | `REDO_TABPFN_MODEL_SHA256` | | 가중치 해시 (시작 시 검증) |

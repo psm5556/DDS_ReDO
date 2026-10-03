@@ -360,7 +360,7 @@ await step("18-menu", async () => {
   await item.getByRole("button", { name: `${ETCH.name} 메뉴` }).click();
   await page.getByRole("menu").waitFor();
   await mark([[page.getByRole("menu"), 1]]);
-  await shot("18-menu", { top: false, clip: { x: 0, y: 0, width: 760, height: 520 } });
+  await shot("18-menu", { top: false, clip: { x: 0, y: 0, width: 760, height: 680 } });
   await page.keyboard.press("Escape");
 });
 
@@ -392,7 +392,7 @@ await step("22-dark", async () => {
 await step("23-conversa", async () => {
   await page.goto(`${BASE}/projects/${NEW_ID}/step/1`);
   await page.locator("#cell-0-0").waitFor();
-  await page.locator(".sidebar").getByRole("button", { name: "DDS Conversa 열기" }).click();
+  await page.getByRole("button", { name: "DDS Conversa 펼치기" }).click();
   const panel = page.getByRole("complementary", { name: "DDS Conversa" });
   const box = panel.getByRole("textbox", { name: "DDS Conversa에게 요청" });
   await box.fill("이 DOE 상태 알려줘");
@@ -403,13 +403,15 @@ await step("23-conversa", async () => {
   await panel.getByRole("group", { name: /확인:/ }).waitFor();
   await wait(400);
   await mark([
-    [page.locator(".sidebar").getByRole("button", { name: "DDS Conversa 열기" }), 1],
+    [panel.locator(".cv-logo"), 1],
     [panel.locator(".cv-msg.assistant").first(), 2],
     [panel.getByRole("group", { name: /확인:/ }), 3],
     [panel.locator(".cv-input"), 4],
     [panel.getByRole("button", { name: "MCP 연결" }), 5],
-    [panel.getByRole("button", { name: "DDS Conversa 접기" }), 6],
-    [page.getByRole("separator", { name: "DDS Conversa 너비 조절" }), 7, 2],
+    [panel.getByRole("button", { name: "대화 목록" }), 6],
+    [panel.getByRole("button", { name: "새 대화" }), 7],
+    [panel.getByRole("button", { name: "DDS Conversa 접기" }), 8],
+    [page.getByRole("separator", { name: "DDS Conversa 너비 조절" }), 9, 2],
   ]);
   await shot("23-conversa", { top: false });
 });
@@ -436,7 +438,31 @@ await step("25-mcp", async () => {
   await mark([[dlg.getByRole("textbox", { name: "MCP 서버 주소" }), 1], [dlg.getByRole("button", { name: "토큰 만들기" }), 2], [dlg.locator(".code-block"), 3]]);
   await shot("25-mcp", { top: false });
   await page.keyboard.press("Escape");
-  await page.getByRole("complementary", { name: "DDS Conversa" }).getByRole("button", { name: "대화 지우기" }).click();
+});
+
+await step("26-conversa-history", async () => {
+  const panel = page.getByRole("complementary", { name: "DDS Conversa" });
+  const box = panel.getByRole("textbox", { name: "DDS Conversa에게 요청" });
+  // 대화를 하나 더 만든 뒤 목록을 연다 (앞의 대화는 저장되어 있다)
+  await panel.getByRole("button", { name: "새 대화" }).click();
+  await box.fill("결과를 엑셀에서 한꺼번에 붙여넣는 방법은?");
+  await box.press("Enter");
+  await panel.locator(".cv-msg.assistant").first().waitFor();
+  await panel.getByRole("button", { name: "대화 목록" }).click();
+  const list = panel.getByRole("region", { name: "대화 목록" });
+  await list.locator(".cv-conv").nth(1).waitFor();
+  const second = list.locator(".cv-conv").nth(1);
+  await second.hover();
+  await wait(300);
+  await mark([
+    [panel.getByRole("button", { name: "대화 목록" }), 1],
+    [list.getByRole("searchbox", { name: "대화 찾기" }), 2],
+    [second.locator(".cv-conv-open"), 3],
+    [second.locator(".cv-conv-acts"), 4],
+    [list.getByRole("button", { name: "새 대화" }), 5],
+  ]);
+  await shotEl("26-conversa-history", panel);
+  await panel.getByRole("button", { name: "대화 목록" }).click();
   await page.keyboard.press("Escape");
 });
 

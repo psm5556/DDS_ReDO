@@ -1,7 +1,7 @@
 import { CircleHelp, Share2, Star } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import { api, del, get, patch } from "../api";
+import { api, del, get } from "../api";
 import { MembersShareModal } from "../components/ProjectMenu";
 import { openManual } from "../manual";
 import GuideView from "../guide/GuideView";
@@ -20,22 +20,15 @@ const ACTION: Record<string, string> = {
   "data.import": "기존 데이터 가져오기", "data.export": "엑셀 다운로드", "run.delete": "런 삭제",
 };
 
-/** DOE 설정 탭: 기본 정보·인자·응답·실험 계획 (+ 상태는 아래 저장 막대에) + 변경 이력 */
+/** DOE 설정 탭: 기본 정보·인자·응답·실험 계획 + 변경 이력. 상태(완료·보관)는 사이드바 ⋯ 메뉴에서 바꾼다 */
 function SettingsView() {
   const { project, reload } = useProject();
-  const toast = useToast();
   const editor = can(project.my_role, "editor");
   const [log, setLog] = useState<{ action: string; user: string | null; detail: Record<string, unknown>; at: string }[] | null>(null);
-  const setStatus = async (s: string) => { await patch(`/api/projects/${project.id}`, { status: s }); await reload(); toast("상태를 바꿨습니다."); };
   return (
     <div className="stack">
       {editor ? (
-        <WizardPage key={project.id} onSaved={reload} footLeft={
-          <label className="row small muted" style={{ gap: 6, flexWrap: "nowrap" }}>상태
-            <select value={project.status} onChange={(e) => void setStatus(e.target.value)} aria-label="DOE 상태">
-              {Object.entries(PROJECT_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select></label>
-        } />
+        <WizardPage key={project.id} onSaved={reload} />
       ) : <section className="panel"><p className="muted small">설정은 편집자 이상만 바꿀 수 있습니다. 실험은 위 탭에서 진행하세요.</p></section>}
       <details className="panel more-panel" onToggle={(e) => {
         if ((e.target as HTMLDetailsElement).open && !log) get<NonNullable<typeof log>>(`/api/projects/${project.id}/audit`).then(setLog).catch(() => setLog([]));

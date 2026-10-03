@@ -77,7 +77,12 @@ DOCS: dict[str, tuple[str, str, str]] = {
     "access_requests": ("공유", "접근 요청 목록", "내 DOE에 들어온 접근 요청."),
     # AI 도우미 (DDS Conversa) · MCP
     "assistant_status": ("AI 도우미", "AI 도우미 상태", "사내 LLM 연결 여부, 모델 이름, 쓸 수 있는 도구 목록."),
-    "assistant_chat": ("AI 도우미", "AI 도우미와 대화", "자연어 요청을 사내 LLM이 도구로 처리한다. 데이터를 바꾸는 작업은 바로 실행하지 않고 확인 카드(pending)를 돌려준다."),
+    "assistant_chat": ("AI 도우미", "AI 도우미와 대화", "자연어 요청을 사내 LLM이 도구로 처리한다. 대화는 계정별로 저장되고(conversation_id로 이어 감), 데이터를 바꾸는 작업은 바로 실행하지 않고 확인 카드(pending)를 돌려준다."),
+    "list_conversations": ("AI 도우미", "내 대화 목록", "DDS Conversa 대화 목록 (최근 순, 본인 것만)."),
+    "get_conversation": ("AI 도우미", "대화 불러오기", "대화의 모든 메시지와 확인 카드 처리 결과."),
+    "rename_conversation": ("AI 도우미", "대화 이름 바꾸기", "대화 제목을 바꾼다."),
+    "delete_conversation": ("AI 도우미", "대화 삭제", "대화와 메시지를 지운다 (본인 것만)."),
+    "cancel_pending": ("AI 도우미", "확인 카드 취소", "확인 카드를 실행하지 않고 취소로 표시한다."),
     "assistant_confirm": ("AI 도우미", "AI 도우미 작업 실행", "사용자가 확인 카드를 승인하면 그 작업을 실행한다 (서명된 토큰, 10분 유효, 본인만)."),
     "list_tokens": ("AI 도우미", "MCP 연결 토큰 목록", "내 개인 토큰(앞부분만 표시)."),
     "create_token": ("AI 도우미", "MCP 연결 토큰 만들기", "MCP 클라이언트가 내 권한으로 접속할 개인 토큰을 만든다. 토큰 원문은 이때 한 번만 보여 준다."),

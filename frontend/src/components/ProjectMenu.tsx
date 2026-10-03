@@ -1,9 +1,9 @@
-import { CopyPlus, Settings, Star, Trash2, Users } from "lucide-react";
+import { Archive, ArchiveRestore, CircleCheck, CopyPlus, RotateCcw, Settings, Star, Trash2, Users } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { del, get, post } from "../api";
-import { notifyProjectsChanged } from "../guide/steps";
-import { ProjectContext } from "../project";
+import { del, get, patch, post } from "../api";
+import { notifyDataChanged, notifyProjectsChanged } from "../guide/steps";
+import { can, ProjectContext } from "../project";
 import MembersShare from "../sections/ShareSection";
 import { useToast } from "../toast";
 import type { ProjectDetail, ProjectSummary } from "../types";
@@ -57,11 +57,22 @@ export function ProjectMenu({ p, at, onClose, onFav }: {
       nav(`/projects/${n.id}`);
     } catch (e) { toast((e as Error).message, true); }
   };
+  // DOE 상태(진행 중·완료·보관): 편집자 이상. 보관하면 첫 화면 목록에서 빠지고 사이드바에서 흐리게 보인다
+  const setStatus = async (status: string, msg: string) => {
+    onClose();
+    try {
+      await patch(`/api/projects/${p.id}`, { status });
+      toast(msg);
+      notifyProjectsChanged();
+      notifyDataChanged(); // 열려 있는 DOE 머리글도 바로 바뀌게
+    } catch (e) { toast((e as Error).message, true); }
+  };
+  const editor = can(p.my_role, "editor");
   const item = (icon: React.ReactNode, label: string, on: () => void, danger = false) => (
     <button role="menuitem" className={danger ? "danger" : ""} onClick={on}>{icon}{label}</button>
   );
   // 화면 밖으로 나가지 않게 위치 보정
-  const style = { left: Math.min(at.x, window.innerWidth - 220), top: Math.min(at.y, window.innerHeight - 240) };
+  const style = { left: Math.min(at.x, window.innerWidth - 220), top: Math.min(at.y, window.innerHeight - 320) };
   return (
     <>
       {menuOpen && (
@@ -70,6 +81,14 @@ export function ProjectMenu({ p, at, onClose, onFav }: {
           {item(<Users size={14} />, p.my_role === "owner" ? "멤버·공유" : "멤버 보기", () => setMembers(true))}
           {item(<Star size={14} fill={p.is_favorite ? "currentColor" : "none"} />, p.is_favorite ? "즐겨찾기 해제" : "즐겨찾기 추가", () => { onFav(p); onClose(); })}
           {item(<CopyPlus size={14} />, "새 DOE로 복제", duplicate)}
+          {editor && <>
+            <div className="ctx-sep" />
+            {p.status === "active" && item(<CircleCheck size={14} />, "완료로 표시", () => void setStatus("completed", "완료로 표시했습니다."))}
+            {p.status === "completed" && item(<RotateCcw size={14} />, "진행 중으로 되돌리기", () => void setStatus("active", "진행 중으로 되돌렸습니다."))}
+            {p.status === "archived"
+              ? item(<ArchiveRestore size={14} />, "보관 해제", () => void setStatus("active", "보관을 해제했습니다."))
+              : item(<Archive size={14} />, "보관", () => void setStatus("archived", "보관했습니다. 첫 화면에서는 빠지고, 사이드바에는 흐리게 남습니다."))}
+          </>}
           {p.my_role === "owner" && <><div className="ctx-sep" />{item(<Trash2 size={14} />, "삭제", () => setConfirmDel(true), true)}</>}
         </div>
       )}

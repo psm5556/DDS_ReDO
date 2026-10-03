@@ -42,7 +42,8 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.1
     llm_num_ctx: int = 16384         # Ollama 문맥 길이 (도구 설명이 들어가도록 넉넉히)
     llm_max_steps: int = 6           # 한 번의 요청에서 도구를 부를 수 있는 최대 횟수
-    mcp_enabled: bool = True         # /mcp (개인 토큰으로 접속)
+    # 앱 밖 AI(사내 MCP 클라이언트) 연결: /mcp · 개인 토큰 · 화면의 'MCP 연결'. false로 끄면 셋 다 막힌다 (이미 만든 토큰 포함)
+    mcp_enabled: bool = True
 
     @property
     def llm_enabled(self) -> bool:

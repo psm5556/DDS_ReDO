@@ -433,7 +433,7 @@ class AuthProvider(Protocol):
   - 프론트엔드: 결과 입력 그리드(붙여넣기, 키보드 이동, 검증 메시지) E2E 테스트
   - **권한 테스트**: 역할별 허용/거부 매트릭스, 타 사업부·비공유 프로젝트 접근 차단(IDOR), 공유 철회·만료 후 차단, 비활성 사용자 차단
   - Mock 인증이 운영 설정에서 활성화되지 않는지 확인하는 테스트
-- **AI 도우미(DDS Conversa)·MCP**: 도구는 `backend/app/assistant/tools.py` 한 곳에 등록한다(MCP와 화면 대화가 같은 도구를 쓴다).
+- **AI 도우미(DDS Conversa)·MCP**: 대화 기록은 계정별로 서버에 저장한다(본인만 접근). MCP(앱 밖 AI 연결)는 `REDO_MCP_ENABLED`(기본 켬)로 켜고 끈다. 도구는 `backend/app/assistant/tools.py` 한 곳에 등록한다(MCP와 화면 대화가 같은 도구를 쓴다).
   - 읽기는 `run`, 쓰기는 `prepare`(검증 + 미리 보기)와 `execute`로 나눈다. 되돌리기 어려운 작업은 `danger=True`(두 번 확인).
   - 도구는 기존 API 함수를 불러 같은 권한 검사·감사 로그를 거치게 한다.
   - 새 API에는 `app/api_docs.py`에 한국어 요약을 추가한다(테스트가 검사).

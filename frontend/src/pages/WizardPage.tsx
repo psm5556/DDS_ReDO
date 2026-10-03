@@ -1,5 +1,5 @@
 import { ClipboardPaste, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { get, patch, post } from "../api";
 import { DataToConfigModal, type DataConfig } from "../components/DataToConfig";
@@ -83,7 +83,7 @@ const blankR = (rows: RRow[]): RRow => ({ key: newKey("r", rows.map((x) => x.key
   criterion: "auto", weight: "1", input_min: "", input_max: "", decimals: "2" });
 
 /** DOE 만들기(/new)·DOE 설정(DOE 이름 클릭) 한 페이지: 기본 정보 + 인자 표 + 응답·목표 표 + 실험 계획 한 줄 */
-export default function WizardPage({ onSaved, footLeft }: { onSaved?: () => void; footLeft?: ReactNode } = {}) {
+export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
   const { pid } = useParams();
   const editing = !!pid;
   const nav = useNavigate();
@@ -100,6 +100,8 @@ export default function WizardPage({ onSaved, footLeft }: { onSaved?: () => void
   const [surrogates, setSurrogates] = useState<SurrogateInfo[]>([]);
   const [hasRuns, setHasRuns] = useState(false);
   const [reason, setReason] = useState("");
+  const [loaded, setLoaded] = useState(0); // 서버에서 설정을 읽어 온 횟수 (기준 설정을 다시 잡는 신호)
+  const baseConfig = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showErr, setShowErr] = useState(false);
@@ -131,6 +133,7 @@ export default function WizardPage({ onSaved, footLeft }: { onSaved?: () => void
         usl: str(r.usl), criterion: r.criterion ?? "auto", weight: str(r.weight ?? 1), input_min: str(r.input_min), input_max: str(r.input_max),
         decimals: str(r.decimals), locked: p.runs_total > 0 })));
       setSettings(p.config.settings);
+      setLoaded((n) => n + 1);
     }).catch((e) => setErr(e.message));
   }, [pid]);
 
@@ -166,6 +169,11 @@ export default function WizardPage({ onSaved, footLeft }: { onSaved?: () => void
     settings: { ...settings, primary_response: responses.some((r) => r.key === settings.primary_response) ? settings.primary_response : responses[0].key },
   });
 
+  // 실험 데이터가 있는 DOE에서 인자·응답·실험 계획을 바꿨을 때만 '변경 사유'를 받는다 (이름·설명만 바꾸면 묻지 않음)
+  const configNow = JSON.stringify(toConfig());
+  useEffect(() => { if (loaded) baseConfig.current = configNow; }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  const askReason = editing && hasRuns && baseConfig.current !== null && configNow !== baseConfig.current;
+
   const save = async () => {
     if (!valid) { setShowErr(true); return; }
     setSaving(true); setErr(null);
@@ -176,6 +184,7 @@ export default function WizardPage({ onSaved, footLeft }: { onSaved?: () => void
         await patch(`/api/projects/${pid}`, { ...body, change_reason: reason, new_factor_values: newFactorValues });
         toast("설정을 저장했습니다.");
         setReason("");
+        baseConfig.current = configNow;
         onSaved?.();
       } else {
         const p = await post<ProjectDetail>("/api/projects", body);
@@ -247,7 +256,10 @@ export default function WizardPage({ onSaved, footLeft }: { onSaved?: () => void
         <section>
           <h3>실험 계획</h3>
           <div className="table-wrap">
-            <table className="grid-table edit-grid">
+            <table className="grid-table edit-grid plan-grid">
+              {/* 글자를 고르는 칸(방식·모델)은 넓게, 숫자 칸은 좁게 */}
+              <colgroup><col style={{ width: "25%" }} /><col style={{ width: "5%" }} /><col style={{ width: "9%" }} /><col style={{ width: "9%" }} />
+                <col style={{ width: "8%" }} /><col style={{ width: "10%" }} /><col style={{ width: "10%" }} /><col style={{ width: "24%" }} /></colgroup>
               <thead><tr>
                 <th>최적화 방식</th><th title="평균∓kσ 기준의 k">k</th><th>초기 실험점</th><th>반복 비율</th><th>반복 횟수</th>
                 <th>한 번에 제안</th><th>실험 예산 (런)</th><th>예측 모델</th>
@@ -278,9 +290,12 @@ export default function WizardPage({ onSaved, footLeft }: { onSaved?: () => void
         {showErr && !valid && <div className="notice err">빨간 칸을 고쳐 주세요.{!name.trim() ? " DOE 이름을 입력하세요." : ""} {dataErr.join(" ")}</div>}
         {!showErr && dataErr.length > 0 && <div className="notice warn">{dataErr.join(" ")}</div>}
         <div className="row form-foot">
-          {footLeft}
-          {editing && <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="변경 사유 (선택)" aria-label="변경 사유" style={{ flex: 1, minWidth: 220 }} />}
-          {!editing && <span className="grow" />}
+          {askReason ? (
+            <label className="reason-field">
+              <span className="small muted">실험 데이터가 있는 DOE의 설정을 바꿉니다. 이유를 남기면 변경 이력에 함께 기록됩니다.</span>
+              <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="변경 사유 (선택) 예: 온도 범위 확장 — 상한에서 최적 예상" aria-label="변경 사유" />
+            </label>
+          ) : <span className="grow" />}
           <button className="primary big" disabled={saving} onClick={save}>{saving ? "저장 중" : editing ? "설정 저장" : pending ? `DOE 만들기 + 데이터 ${pending.length}건 가져오기` : "DOE 만들기"}</button>
         </div>
       </div>
