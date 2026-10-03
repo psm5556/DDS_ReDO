@@ -109,8 +109,7 @@ export default function RunEntryPage() {
         )}
       </div>
       <div className="row" style={{ marginTop: 12 }}>
-        <Link className="btn" to={`/projects/${project.id}/results`}>전체 결과 입력 화면</Link>
-        <Link className="btn" to={`/projects/${project.id}`}>프로젝트 개요</Link>
+        <Link className="btn" to={`/projects/${project.id}/step/1`}>남은 실험 모두 보기</Link>
       </div>
     </div>
   );

@@ -1,14 +1,17 @@
+import { ClipboardPaste, Copy, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, get, post } from "../api";
-import { Modal } from "../components/Modal";
+import { ApiError, del, get, post } from "../api";
+import { Confirm, Modal } from "../components/Modal";
 import { FAIL_REASONS, RunCard, type RowPatch } from "../components/RunCard";
 import { fmtFactor, STATUS_LABEL, when } from "../format";
+import { useGridSelect } from "../gridSelect";
+import { copyText, matchHeader, parseClipboard, toTsv, type PasteTarget } from "../paste";
 import { can, useProject } from "../project";
 import { useToast } from "../toast";
 import type { Batch, Run } from "../types";
 
 type Edit = { actual: Record<string, string>; values: Record<string, string>; note: string; status?: string; fail_reason?: string };
-type Col = { kind: "act" | "val" | "note"; key: string };
+type Col = PasteTarget;
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "offline" | "error";
 
 function useNarrow() {
@@ -24,13 +27,15 @@ function useNarrow() {
 
 const isNum = (s: string) => s.trim() !== "" && Number.isFinite(Number(s.replace(/,/g, "")));
 const toNum = (s: string) => Number(s.replace(/,/g, ""));
+const isEditable = (el: Element | null) => !!el && (el.matches("input, textarea, select") || (el as HTMLElement).isContentEditable);
 
-interface PreviewRow { code: string; run_id: number | null; changes: { field: string; old: unknown; new: unknown }[]; errors: string[]; warnings: string[]; row: RowPatch | null; }
-interface Preview { file_errors: string[]; rows: PreviewRow[]; summary: { rows: number; changed: number; errors: number } }
-
+/** 실험 표(① 실험하기): 실험 조건(인자별 열)과 결과 입력을 한 표에서.
+ *  기본은 남은 실험만, 세팅값 칸은 필요할 때만 연다. 끝난 실험도 보면 이상치 제외를 할 수 있다.
+ *  엑셀과는 파일 대신 복사·붙여넣기로 주고받는다 (사내 보안 정책상 파일은 읽을 수 없음). */
 export default function ResultsSection() {
   const { project, reload } = useProject();
   const toast = useToast();
+  const tableRef = useRef<HTMLTableElement>(null);
   const narrow = useNarrow();
   const fs = project.config.factors;
   const rs = project.config.responses;
@@ -38,8 +43,7 @@ export default function ResultsSection() {
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [loadSeq, setLoadSeq] = useState(0);
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [batch, setBatch] = useState<number | "all">("all");
-  const [onlyOpen, setOnlyOpen] = useState(project.runs_open > 0);
+  const [onlyOpen, setOnlyOpen] = useState(false); // 기본: 모든 실험 (조건·결과는 언제든 수정)
   const [edits, setEdits] = useState<Record<number, Edit>>(() => {
     try { return JSON.parse(localStorage.getItem(draftKey) || "{}"); } catch { return {}; }
   });
@@ -47,12 +51,12 @@ export default function ResultsSection() {
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [state, setState] = useState<SaveState>(Object.keys(edits).length ? "dirty" : "idle");
   const [lastSaved, setLastSaved] = useState<string | null>(null);
-  const [failFor, setFailFor] = useState<{ run: Run; status: "failed" | "infeasible" } | null>(null);
-  const [excludeFor, setExcludeFor] = useState<Run | null>(null);
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [failFor, setFailFor] = useState<Run | null>(null);
+  const [deleteFor, setDeleteFor] = useState<Run | null>(null);
+  const [cancel, setCancel] = useState<Batch | null>(null);
   const savingRef = useRef(false);
   const readOnly = !can(project.my_role, "runner");
+  const editor = can(project.my_role, "editor");
 
   const load = useCallback(async () => {
     const [rr, bs] = await Promise.all([get<Run[]>(`/api/projects/${project.id}/runs`), get<Batch[]>(`/api/projects/${project.id}/batches`)]);
@@ -68,22 +72,42 @@ export default function ResultsSection() {
     } catch { /* 저장 불가 환경 */ }
   }, [edits, draftKey]);
 
+  // 입력 가능한 칸의 순서 (붙여넣기·키보드 이동 기준): [세팅값] → 결과 → 메모
   const cols: Col[] = useMemo(() => [
     ...fs.map((f) => ({ kind: "act" as const, key: f.key })),
     ...rs.map((r) => ({ kind: "val" as const, key: r.key })),
     { kind: "note" as const, key: "note" },
   ], [fs, rs]);
+  const actCols = cols.filter((c) => c.kind === "act");
+  const valCols = cols.filter((c) => c.kind === "val");
+  const noteCol = cols.find((c) => c.kind === "note")!;
 
   // 보이는 행 목록은 필터를 바꾸거나 목록을 다시 불러올 때만 다시 정한다.
   // 자동 저장으로 런이 '완료'가 되어도 입력 중인 행이 사라지거나 행 번호(cell-행-열)가 밀리지 않게 하기 위함.
   const [visibleIds, setVisibleIds] = useState<Set<number> | null>(null);
   useEffect(() => {
     if (!runs) return;
-    setVisibleIds(new Set(runs.filter((r) => (batch === "all" || r.batch_id === batch)
-      && (!onlyOpen || r.status === "planned" || r.status === "running" || edits[r.id])).map((r) => r.id)));
+    setVisibleIds(new Set(runs.filter((r) => !onlyOpen || r.status === "planned" || r.status === "running" || edits[r.id]).map((r) => r.id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [batch, onlyOpen, loadSeq]);
+  }, [onlyOpen, loadSeq]);
   const shown = useMemo(() => (runs ?? []).filter((r) => visibleIds?.has(r.id)), [runs, visibleIds]);
+  // 반복 표시: 같은 차수 안에서 같은 조건을 여러 번 하는 런은 '몇 번째/전체'(예: 2/3), 지난 차수 조건을 다시 하면 '재확인'
+  const repLabel = useMemo(() => {
+    const groups = new Map<string, Run[]>();
+    for (const r of runs ?? []) {
+      const k = `${r.batch_id}|${fs.map((f) => r.planned[f.key]).join(",")}`;
+      groups.set(k, [...(groups.get(k) ?? []), r]);
+    }
+    const out = new Map<number, string>();
+    for (const g of groups.values()) {
+      const sorted = [...g].sort((a, b) => a.run_order - b.run_order);
+      sorted.forEach((r, i) => {
+        if (sorted.length > 1) out.set(r.id, `${i + 1}/${sorted.length}`);
+        else if (r.is_replicate_of_existing) out.set(r.id, "재확인");
+      });
+    }
+    return out;
+  }, [runs, fs]);
 
   const base = (r: Run): Edit => ({
     actual: Object.fromEntries(fs.map((f) => [f.key, String(r.actual[f.key] ?? r.planned[f.key])])),
@@ -126,7 +150,8 @@ export default function ResultsSection() {
     }
     return cls.join(" ");
   };
-  const rowValid = (r: Run) => cols.every((c) => !cellClass(r, c).includes("bad"));
+  const allCols: Col[] = [...fs.map((f) => ({ kind: "act" as const, key: f.key })), ...rs.map((x) => ({ kind: "val" as const, key: x.key })), { kind: "note", key: "note" }];
+  const rowValid = (r: Run) => allCols.every((c) => !cellClass(r, c).includes("bad"));
 
   const buildPatch = (r: Run, e: Edit): RowPatch => {
     const p: RowPatch = { run_id: r.id };
@@ -215,31 +240,95 @@ export default function ResultsSection() {
     else if (e.key === "ArrowDown") { e.preventDefault(); focusCell(row + 1, col); }
     else if (e.key === "ArrowUp") { e.preventDefault(); focusCell(row - 1, col); }
   };
-  const onPaste = (e: React.ClipboardEvent<HTMLInputElement>, row: number, col: number) => {
-    const text = e.clipboardData.getData("text");
-    if (!/[\t\n]/.test(text.trim())) return;
-    e.preventDefault();
-    const lines = text.replace(/\r/g, "").split("\n");
-    while (lines.length && lines[lines.length - 1] === "") lines.pop();
+
+  /** 엑셀 붙여넣기. 머리글 행이 있으면 열 이름으로, 첫 열이 런 ID면 런 ID로 맞추고, 아니면 고른 칸부터 차례로 채운다. */
+  const applyPaste = (text: string, startRow: number | null, startCol: number | null): boolean => {
+    if (!runs) return false;
+    const rows = parseClipboard(text);
+    if (!rows.length) return false;
+    const header = matchHeader(rows[0], fs, rs);
+    const body = header ? rows.slice(1) : rows;
+    const byCode = new Map(runs.map((r) => [r.code.toUpperCase(), r]));
+    // 런 ID는 '1차-01' 형식. 예전에 인쇄한 시트의 'B1-01'도 같은 런으로 인식한다
+    const codeOf = (cells: string[], i: number) => (cells[i] ?? "").trim().replace(/\s+/g, "").toUpperCase().replace(/^B(\d+)-/, "$1차-");
+    const codeIdx = header ? header.indexOf("code") : body.every((c) => byCode.has(codeOf(c, 0))) ? 0 : -1;
+    const keyed = !!header || codeIdx >= 0; // 머리글·런 ID로 맞출 때는 빈 칸으로 기존 값을 지우지 않는다
+    const firstVal = cols.findIndex((c) => c.kind === "val");
+    const missing: string[] = [];
+    const plan: { run: Run; sets: [Col, string][] }[] = [];
+    body.forEach((cells, i) => {
+      let run: Run | undefined;
+      if (codeIdx >= 0) {
+        run = byCode.get(codeOf(cells, codeIdx));
+        if (!run) { if (codeOf(cells, codeIdx)) missing.push(cells[codeIdx].trim()); return; }
+      } else run = shown[(startRow ?? 0) + i];
+      if (!run) return;
+      const sets: [Col, string][] = [];
+      if (header) header.forEach((t, j) => { if (t && t !== "code") sets.push([t, cells[j] ?? ""]); });
+      else {
+        const rest = codeIdx === 0 ? cells.slice(1) : cells;
+        const c0 = startCol ?? Math.max(firstVal, 0);
+        rest.forEach((v, j) => { const c = cols[c0 + j]; if (c) sets.push([c, v]); });
+      }
+      plan.push({ run, sets: sets.filter(([, v]) => !(keyed && v.trim() === "")) });
+    });
+    if (!plan.length) {
+      if (missing.length) toast(`표에 없는 런 ID입니다: ${missing.slice(0, 5).join(", ")}`, true);
+      return missing.length > 0;
+    }
     setEdits((prev) => {
       const next = { ...prev };
-      lines.forEach((line, i) => {
-        const r = shown[row + i];
-        if (!r) return;
-        const ed = { ...(next[r.id] ?? base(r)) };
+      for (const { run, sets } of plan) {
+        const ed = { ...(next[run.id] ?? base(run)) };
         ed.actual = { ...ed.actual }; ed.values = { ...ed.values };
-        line.split("\t").forEach((v, j) => {
-          const c = cols[col + j];
-          if (!c) return;
-          const s = v.trim();
-          if (c.kind === "act") ed.actual[c.key] = s; else if (c.kind === "val") ed.values[c.key] = s; else ed.note = v;
-        });
-        next[r.id] = ed;
-      });
+        for (const [c, v] of sets) {
+          const s = c.kind === "note" ? v : v.trim();
+          if (c.kind === "act") ed.actual[c.key] = s;
+          else if (c.kind === "val") ed.values[c.key] = s;
+          else ed.note = s;
+        }
+        next[run.id] = ed;
+      }
       return next;
     });
+    setVisibleIds((prev) => new Set([...(prev ?? []), ...plan.map((p) => p.run.id)]));
     setState("dirty");
-    toast(`${lines.length}행을 붙여넣었습니다.`);
+    const how = [header && "머리글로 열을 맞춤", codeIdx >= 0 && "런 ID로 행을 맞춤"].filter(Boolean).join(", ");
+    toast(`${plan.length}행을 붙여넣었습니다${how ? ` (${how})` : ""}.${missing.length ? ` 표에 없는 런 ID ${missing.length}개는 건너뜀.` : ""}`);
+    return true;
+  };
+  const onPaste = (e: React.ClipboardEvent<HTMLInputElement>, row: number, col: number) => {
+    const text = e.clipboardData.getData("text");
+    if (!/[\t\n]/.test(text.trim())) return; // 한 칸짜리는 기본 붙여넣기
+    e.preventDefault();
+    e.stopPropagation();
+    applyPaste(text, row, col);
+  };
+  // 범위 선택(드래그) → Ctrl+C 복사, 범위를 고른 채 Ctrl+V 하면 그 범위 왼쪽 위 칸부터 붙여넣기
+  useGridSelect(tableRef, (r, c) => toast(`${r}행 × ${c}열을 복사했습니다. 엑셀에 붙여넣으세요.`), (el, text) => {
+    const m = el.id.match(/^cell-(\d+)-(\d+)$/);
+    if (m && !readOnly) applyPaste(text, Number(m[1]), Number(m[2]));
+  });
+  // 칸을 고르지 않고 화면 어디서나 Ctrl+V 해도 표에 들어가게 (입력 칸 밖에서만)
+  const pasteRef = useRef(applyPaste);
+  pasteRef.current = applyPaste;
+  useEffect(() => {
+    if (readOnly) return;
+    const h = (e: ClipboardEvent) => {
+      if (isEditable(document.activeElement) || document.querySelector(".modal-back")) return;
+      const text = e.clipboardData?.getData("text") ?? "";
+      if (text.trim() && pasteRef.current(text, null, null)) e.preventDefault();
+    };
+    document.addEventListener("paste", h);
+    return () => document.removeEventListener("paste", h);
+  }, [readOnly]);
+
+  const copyTable = async () => {
+    const head = ["런 ID", "순서", ...fs.map((f) => `${f.name} [${f.unit}]`), ...rs.map((x) => `${x.name}${x.unit ? ` [${x.unit}]` : ""}`), "메모", "상태"];
+    const body = shown.map((r) => [r.code, r.run_order, ...fs.map((f) => cell(r, { kind: "act", key: f.key })),
+      ...rs.map((x) => cell(r, { kind: "val", key: x.key })), cell(r, { kind: "note", key: "note" }), STATUS_LABEL[r.status]]);
+    await copyText(toTsv([head, ...body]));
+    toast(`표 ${shown.length}행을 복사했습니다. 엑셀에 붙여넣어 쓰고, 결과를 채운 뒤 다시 복사해 이 화면에 붙여넣으세요.`);
   };
 
   const onCardSave = async (p: RowPatch) => {
@@ -247,29 +336,9 @@ export default function ResultsSection() {
     await load();
   };
 
-  const changeStatus = (r: Run, s: string) => {
-    if (s === "failed" || s === "infeasible") { setFailFor({ run: r, status: s }); return; }
-    void saveRows([{ run_id: r.id, status: s }], {});
-  };
-
-  const upload = async (file: File) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    try { setPreview(await api<Preview>(`/api/projects/${project.id}/results/preview`, { method: "POST", form: fd })); }
-    catch (e) { toast((e as Error).message, true); }
-    if (fileRef.current) fileRef.current.value = "";
-  };
-  const commitPreview = async () => {
-    if (!preview) return;
-    const rows = preview.rows.filter((r) => r.row && r.errors.length === 0 && r.changes.length > 0).map((r) => r.row!);
-    await saveRows(rows, {});
-    setPreview(null);
-    await load();
-    toast(`${rows.length}개 런을 반영했습니다.`);
-  };
 
   if (!runs || !visibleIds) return <div className="busy"><span className="spinner" /> 불러오는 중</div>;
-  if (runs.length === 0) return <div className="panel empty"><h3>입력할 실험이 없습니다</h3><p>먼저 실험 계획을 만드세요.</p></div>;
+  if (runs.length === 0) return <div className="panel empty"><h3>실험이 없습니다</h3><p>먼저 첫 실험 계획을 만드세요.</p></div>;
 
   const stateText: Record<SaveState, string> = {
     idle: "", dirty: "입력 중 · 잠시 후 자동 저장", saving: "저장 중",
@@ -278,47 +347,54 @@ export default function ResultsSection() {
     error: "저장하지 못한 입력이 있습니다. 빨간 칸을 확인하세요.",
   };
   const warnRuns = Object.entries(warnings).filter(([, w]) => w.length);
+  // 가장 최근 차수가 아직 하나도 시작하지 않았으면 취소할 수 있다
+  const latest = [...batches].sort((a, b) => b.seq - a.seq)[0];
+  const canCancel = !!latest && runs.filter((r) => r.batch_id === latest.id).every((r) => r.status === "planned");
+  const input = (r: Run, c: Col, ri: number) => {
+    const ci = cols.findIndex((x) => x.kind === c.kind && x.key === c.key);
+    const f = c.kind === "act" ? fs.find((x) => x.key === c.key)! : null;
+    return (
+      <td key={c.kind + c.key} className={cellClass(r, c)} style={c.kind === "note" ? { minWidth: 150 } : { minWidth: 90 }}
+        title={f ? `계획값 ${fmtFactor(r.planned[c.key], f)}${f.unit}` : c.kind === "val" && r.excluded[c.key] ? "분석에서 제외됨" : undefined}>
+        <input id={`cell-${ri}-${ci}`} type="text" inputMode={c.kind === "note" ? "text" : "decimal"} value={cell(r, c)} disabled={readOnly}
+          style={c.kind === "val" && r.excluded[c.key] ? { textDecoration: "line-through" } : undefined}
+          onChange={(e) => setCell(r, c, e.target.value)} onKeyDown={(e) => onKey(e, ri, ci)} onPaste={(e) => onPaste(e, ri, ci)}
+          aria-label={`${r.code} ${c.kind === "note" ? "메모" : f ? f.name + " 실제값" : rs.find((x) => x.key === c.key)!.name}`} />
+      </td>
+    );
+  };
 
   return (
     <div className="stack">
-      <div className="panel">
-        <div className="panel-head">
-          <h3>결과 입력</h3>
+      <div>
+        <div className="row table-tools">
+          <button className="small" onClick={copyTable} disabled={!shown.length}><Copy size={14} />표 복사 (엑셀로)</button>
+          <label className="check small"><input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} />남은 실험만 보기</label>
+          <span className="grow" />
           <span className={`save-state ${state === "dirty" || state === "saving" ? "dirty" : state === "offline" ? "offline" : ""}`} role="status">{stateText[state]}</span>
+          {!readOnly && state !== "idle" && state !== "saved" && <button className="small primary" onClick={flush}>지금 저장</button>}
+          {editor && canCancel && <button className="small danger" onClick={() => setCancel(latest)}><X size={14} />{latest.seq}차 취소</button>}
         </div>
-        <div className="row" style={{ marginBottom: 12 }}>
-          <select value={batch} onChange={(e) => setBatch(e.target.value === "all" ? "all" : Number(e.target.value))} style={{ width: "auto" }} aria-label="배치">
-            <option value="all">모든 배치</option>
-            {batches.map((b) => <option key={b.id} value={b.id}>{b.seq}차 배치 ({b.runs_done}/{b.runs_total})</option>)}
-          </select>
-          <label className="check"><input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} />남은 실험만</label>
-          <div style={{ flex: 1 }} />
-          {!readOnly && <>
-            <a className="btn small" href={`/api/projects/${project.id}/runsheet.xlsx${batch === "all" ? "" : `?batch_id=${batch}`}`}>엑셀 양식 내려받기</a>
-            <button className="small" onClick={() => fileRef.current?.click()}>엑셀로 결과 올리기</button>
-            <input ref={fileRef} type="file" accept=".xlsx,.csv" hidden onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
-            {state !== "idle" && state !== "saved" && <button className="small primary" onClick={flush}>지금 저장</button>}
-          </>}
-        </div>
-        {!narrow && !readOnly && (
-          <p className="small muted" style={{ marginBottom: 8 }}>
-            엑셀처럼 입력하세요. <span className="kbd">Enter</span> 아래 칸, <span className="kbd">Shift</span>+<span className="kbd">Enter</span> 위 칸.
-            엑셀에서 여러 칸을 복사해 붙여넣을 수 있습니다. 실제 세팅값은 계획값으로 미리 채워져 있으니 다를 때만 고치세요.
-          </p>
+        {!readOnly && (
+          <div className="paste-hint">
+            <ClipboardPaste size={15} />
+            <span>엑셀에서 복사해 <b>Ctrl+V</b> · 런 ID·머리글을 함께 붙여도 자동으로 맞춤 · 표를 드래그해 고른 칸은 <b>Ctrl+C</b>로 엑셀에 복사 · 자동 저장</span>
+          </div>
         )}
-        {shown.length === 0 && <div className="empty"><h3>남은 실험이 없습니다</h3><p>모든 결과가 입력되었습니다. ‘남은 실험만’을 끄면 전체를 볼 수 있습니다.</p></div>}
+        {shown.length === 0 && <div className="empty"><h3>남은 실험이 없습니다</h3><p>모든 결과가 입력되었습니다.</p></div>}
 
         {narrow ? shown.map((r) => (
           <RunCard key={r.id + r.updated_at} run={r} factors={fs} responses={rs} onSave={onCardSave} warnings={warnings[String(r.id)]} readOnly={readOnly} />
         )) : shown.length > 0 && (
           <div className="table-wrap">
-            <table className="grid-table">
+            <table className="grid-table" ref={tableRef}>
               <thead>
                 <tr>
-                  <th>런 ID</th><th>상태</th>
-                  {fs.map((f) => <th key={f.key} className="r" title={`계획값 기준, ${f.low}~${f.high}`}>{f.name} 실제 <span className="unit">{f.unit}</span></th>)}
-                  {rs.map((x) => <th key={x.key} className="r" style={{ background: "var(--mean-soft)" }}>{x.name} <span className="unit">{x.unit}</span></th>)}
-                  <th>메모</th>{can(project.my_role, "editor") && <th />}
+                  {editor && <th style={{ width: 40 }}><span className="sr-only">삭제</span></th>}
+                  <th>런 ID</th><th className="r">순서</th>
+                  {fs.map((f) => <th key={f.key} className="r cond-col" title={`설정 범위 ${f.low}~${f.high}, ${f.step} 단위. 계획과 다르게 세팅했으면 고치세요.`}>{f.name} <span className="unit">{f.unit}</span></th>)}
+                  {rs.map((x) => <th key={x.key} className="r val-col">{x.name} <span className="unit">{x.unit}</span></th>)}
+                  <th title="같은 조건을 여러 번 하는 실험: 몇 번째/전체. 재확인 = 지난 차수에서 한 조건을 다시 측정">반복</th><th>메모</th><th>상태</th>
                 </tr>
               </thead>
               <tbody>
@@ -327,25 +403,33 @@ export default function ResultsSection() {
                   const er = errors[String(r.id)];
                   return (
                     <tr key={r.id} className={r.status}>
-                      <td className="ro num" title={[r.reason, ...(w ?? []), ...(er ?? [])].join("\n")}>
-                        {r.code}{(w?.length || er?.length) ? <span style={{ color: er?.length ? "var(--err)" : "var(--warn)" }}> ⚠</span> : null}
-                        {(r.replicate_no > 1 || r.is_replicate_of_existing) && <span className="chip sigma" style={{ marginLeft: 6 }}>반복</span>}
-                      </td>
-                      <td style={{ minWidth: 104 }}>
-                        <select value={r.status} disabled={readOnly} onChange={(e) => changeStatus(r, e.target.value)} aria-label={`${r.code} 상태`}>
-                          {["planned", "running", "done", "failed", "infeasible"].map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                        </select>
-                      </td>
-                      {cols.map((c, ci) => (
-                        <td key={c.key + c.kind} className={cellClass(r, c)} style={c.kind === "note" ? { minWidth: 160 } : { minWidth: 92 }}
-                          title={c.kind === "act" ? `계획값 ${fmtFactor(r.planned[c.key], fs.find((f) => f.key === c.key)!)}` : c.kind === "val" && r.excluded[c.key] ? "분석에서 제외됨" : undefined}>
-                          <input id={`cell-${ri}-${ci}`} type="text" inputMode={c.kind === "note" ? "text" : "decimal"} value={cell(r, c)} disabled={readOnly}
-                            style={c.kind === "val" && r.excluded[c.key] ? { textDecoration: "line-through" } : undefined}
-                            onChange={(e) => setCell(r, c, e.target.value)} onKeyDown={(e) => onKey(e, ri, ci)} onPaste={(e) => onPaste(e, ri, ci)}
-                            aria-label={`${r.code} ${c.kind === "note" ? "메모" : c.kind === "act" ? fs.find((f) => f.key === c.key)!.name + " 실제값" : rs.find((x) => x.key === c.key)!.name}`} />
+                      {editor && (
+                        <td className="ro del-cell">
+                          <button className="icon-btn danger" aria-label={`${r.code} 삭제`} title="이 런 삭제" onClick={() => setDeleteFor(r)}><Trash2 size={14} /></button>
                         </td>
-                      ))}
-                      {can(project.my_role, "editor") && <td className="ro">{r.status === "done" && <button className="ghost small" onClick={() => setExcludeFor(r)} title="이상치 제외">제외…</button>}</td>}
+                      )}
+                      <td className="ro num" title={[...(w ?? []), ...(er ?? [])].join("\n") || undefined}>
+                        {r.code}{(w?.length || er?.length) ? <span style={{ color: er?.length ? "var(--err)" : "var(--warn)" }}> ⚠</span> : null}
+                      </td>
+                      <td className="ro r num">{r.run_order}</td>
+                      {actCols.map((c) => input(r, c, ri))}
+                      {valCols.map((c) => input(r, c, ri))}
+                      <td className="ro rep-cell" title={r.reason || undefined}>{repLabel.get(r.id) ?? ""}</td>
+                      {input(r, noteCol, ri)}
+                      <td className="ro status-cell" aria-label={`${r.code} 상태`} data-copy={r.status === "running" ? STATUS_LABEL.planned : STATUS_LABEL[r.status]}>
+                        {r.status === "done" ? <span className="chip ok">완료</span>
+                          : r.status === "failed" || r.status === "infeasible" ? (
+                            <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                              <span className="chip err" title={r.fail_reason || undefined}>{STATUS_LABEL[r.status]}</span>
+                              {!readOnly && <button className="link-btn small" onClick={() => void saveRows([{ run_id: r.id, status: "planned" }], {})}>되돌리기</button>}
+                            </span>
+                          ) : (
+                            <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                              <span className="muted small">대기</span>
+                              {!readOnly && <button className="ghost small" title="실험을 못 했으면 실패·실행불가로 표시" onClick={() => setFailFor(r)}>못 함</button>}
+                            </span>
+                          )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -364,81 +448,43 @@ export default function ResultsSection() {
         </div>
       )}
 
-      {failFor && <FailModal run={failFor.run} status={failFor.status} onClose={() => setFailFor(null)}
-        onConfirm={(reason) => saveRows([{ run_id: failFor.run.id, status: failFor.status, fail_reason: reason }], {})} />}
-      {excludeFor && <ExcludeModal run={excludeFor} onClose={() => setExcludeFor(null)} onDone={load} />}
-      {preview && (
-        <Modal title="엑셀 업로드 미리보기" wide onClose={() => setPreview(null)} footer={<>
-          <button onClick={() => setPreview(null)}>취소</button>
-          <button className="primary" disabled={preview.summary.changed === 0 || preview.file_errors.length > 0} onClick={commitPreview}>
-            변경 {preview.summary.changed}건 반영
-          </button>
-        </>}>
-          {preview.file_errors.map((e) => <div key={e} className="notice err" style={{ marginBottom: 8 }}>{e}</div>)}
-          <p className="small" style={{ marginBottom: 10 }}>
-            {preview.summary.rows}행 중 바뀐 내용이 있는 행 {preview.summary.changed}개{preview.summary.errors > 0 && <>, <b style={{ color: "var(--err)" }}>오류 {preview.summary.errors}개 (반영되지 않음)</b></>}.
-          </p>
-          <div className="table-wrap" style={{ maxHeight: 420, overflowY: "auto" }}><table>
-            <thead><tr><th>런 ID</th><th>변경 내용</th><th>확인 사항</th></tr></thead>
-            <tbody>{preview.rows.filter((r) => r.changes.length || r.errors.length).map((r, i) => (
-              <tr key={i} style={r.errors.length ? { background: "var(--err-soft)" } : undefined}>
-                <td className="num">{r.code}</td>
-                <td className="small">{r.changes.map((c) => `${c.field}: ${c.old ?? "–"} → ${c.new ?? "–"}`).join(", ")}</td>
-                <td className="small">{[...r.errors, ...r.warnings].join(" ")}</td>
-              </tr>
-            ))}</tbody>
-          </table></div>
-        </Modal>
-      )}
+      {failFor && <FailModal run={failFor} onClose={() => setFailFor(null)}
+        onConfirm={(status, reason) => saveRows([{ run_id: failFor.id, status, fail_reason: reason }], {})} />}
+      {deleteFor && <Confirm title={`${deleteFor.code} 삭제`} danger confirmLabel="삭제" onClose={() => setDeleteFor(null)}
+        message={<>이 런을 표와 학습에서 뺍니다.{deleteFor.status === "done" ? " 입력한 결과도 학습에 쓰지 않습니다." : ""} 기록은 남아 있어 필요하면 복구할 수 있습니다.</>}
+        onConfirm={async () => {
+          try { await del(`/api/projects/${project.id}/runs/${deleteFor.id}`); toast(`${deleteFor.code}을(를) 삭제했습니다.`); await load(); await reload(); }
+          catch (e) { toast((e as Error).message, true); }
+        }} />}
+      {cancel && <Confirm title="차수 취소" danger confirmLabel="이 차수 취소" onClose={() => setCancel(null)}
+        message={`${cancel.seq}차의 계획된 실험 ${cancel.runs_total}건을 삭제합니다. 아직 시작하지 않은 차수만 취소할 수 있습니다.`}
+        onConfirm={async () => {
+          try { await del(`/api/projects/${project.id}/batches/${cancel.id}`); toast("차수를 취소했습니다."); await load(); await reload(); }
+          catch (e) { toast((e as Error).message, true); }
+        }} />}
     </div>
   );
 }
 
-function FailModal({ run, status, onClose, onConfirm }: { run: Run; status: "failed" | "infeasible"; onClose: () => void; onConfirm: (r: string) => void }) {
+function FailModal({ run, onClose, onConfirm }: { run: Run; onClose: () => void; onConfirm: (s: "failed" | "infeasible", r: string) => void }) {
+  const [status, setStatus] = useState<"failed" | "infeasible">("failed");
   const [reason, setReason] = useState(FAIL_REASONS[0]);
   const [memo, setMemo] = useState("");
   return (
-    <Modal title={`${run.code} ${status === "failed" ? "실패" : "실행 불가"}로 표시`} onClose={onClose} footer={<>
+    <Modal title={`${run.code} 실험을 못 했어요`} onClose={onClose} footer={<>
       <button onClick={onClose}>취소</button>
-      <button className="danger" onClick={() => { onConfirm(memo ? `${reason}: ${memo}` : reason); onClose(); }}>표시</button>
+      <button className="danger" onClick={() => { onConfirm(status, memo ? `${reason}: ${memo}` : reason); onClose(); }}>표시</button>
     </>}>
-      <p className="small muted" style={{ marginBottom: 10 }}>이 런은 분석에서 빠집니다. 실행 불가 조건이 특정 영역에 몰리면 알려 드립니다.</p>
+      <p className="small muted" style={{ marginBottom: 10 }}>이 런은 학습에서 빠집니다. 되돌리기로 언제든 취소할 수 있습니다.</p>
       <div className="stack">
+        <span className="seg" role="radiogroup" aria-label="종류">
+          <button role="radio" aria-checked={status === "failed"} className={status === "failed" ? "on" : ""} onClick={() => setStatus("failed")}>실패 (했지만 결과를 못 얻음)</button>
+          <button role="radio" aria-checked={status === "infeasible"} className={status === "infeasible" ? "on" : ""} onClick={() => setStatus("infeasible")}>실행 불가 (조건을 맞출 수 없음)</button>
+        </span>
         <label className="field"><span className="lbl">사유</span>
           <select value={reason} onChange={(e) => setReason(e.target.value)}>{FAIL_REASONS.map((r) => <option key={r}>{r}</option>)}</select></label>
         <label className="field"><span className="lbl">메모 (선택)</span><input type="text" value={memo} onChange={(e) => setMemo(e.target.value)} /></label>
       </div>
-    </Modal>
-  );
-}
-
-function ExcludeModal({ run, onClose, onDone }: { run: Run; onClose: () => void; onDone: () => Promise<void> }) {
-  const { project } = useProject();
-  const toast = useToast();
-  const [state, setState] = useState<Record<string, boolean>>({ ...run.excluded });
-  const [reason, setReason] = useState("");
-  const changed = project.config.responses.filter((r) => state[r.key] !== run.excluded[r.key] && run.values[r.key] != null);
-  const save = async () => {
-    try {
-      for (const r of changed) await post(`/api/projects/${project.id}/runs/${run.id}/exclude`, { response_key: r.key, excluded: state[r.key], reason });
-      toast("반영했습니다. 다음 분석부터 적용됩니다.");
-      await onDone(); onClose();
-    } catch (e) { toast((e as Error).message, true); }
-  };
-  return (
-    <Modal title={`${run.code} 분석 제외`} onClose={onClose} footer={<>
-      <button onClick={onClose}>취소</button>
-      <button className="primary" disabled={!changed.length || !reason.trim()} onClick={save}>저장</button>
-    </>}>
-      <p className="small muted" style={{ marginBottom: 10 }}>측정값은 삭제되지 않고 분석에서만 빠집니다. 사유는 변경 이력에 남습니다.</p>
-      {project.config.responses.map((r) => (
-        <label key={r.key} className="check" style={{ display: "flex", marginBottom: 6 }}>
-          <input type="checkbox" checked={!!state[r.key]} disabled={run.values[r.key] == null} onChange={(e) => setState({ ...state, [r.key]: e.target.checked })} />
-          {r.name} ({run.values[r.key] ?? "값 없음"} {r.unit}) 분석에서 제외
-        </label>
-      ))}
-      <label className="field" style={{ marginTop: 10 }}><span className="lbl">사유</span>
-        <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="예: 측정 장비 교정 전 데이터" /></label>
     </Modal>
   );
 }

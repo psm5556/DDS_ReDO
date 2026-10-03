@@ -24,6 +24,11 @@ class Objective:
               k_sigma: float | None = None) -> "Objective":
         mode = mode or st.mode
         kind = "mean"
+        crit = getattr(resp, "criterion", "auto")
+        if mode != "explore" and crit != "auto" and robust_objective is None:
+            # 응답별로 정한 최적화 기준이 있으면 그것을 따른다 (DOE 설정의 응답 표 한 행에서 지정)
+            return Objective(mode="robust" if crit != "mean" else "optimize", kind=crit, goal=resp.goal, target=resp.target,
+                             lsl=resp.lsl, usl=resp.usl, k=st.k_sigma if k_sigma is None else k_sigma)
         if mode == "robust":
             kind = robust_objective or st.robust_objective
             if kind == "spec_prob" and resp.lsl is None and resp.usl is None:

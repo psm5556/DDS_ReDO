@@ -1,59 +1,15 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { cell, createProject, login, paste, runs } from "./helpers";
 
 // 결과 입력 그리드 E2E (CLAUDE.md 10장): 붙여넣기, 키보드 이동, 검증 메시지, 자동 저장.
 // 각 테스트는 자기 프로젝트를 새로 만들어 서로 영향을 주지 않는다.
 
-const H = { "X-Requested-With": "ReDO" };
 // 그리드 열 순서: 인자 실제값(temp, time) → 응답(yield) → 메모
 const COL = { temp: 0, time: 1, yield: 2, note: 3 };
 
-interface RunLite { id: number; code: string; status: string; run_order: number; values: Record<string, number | null> }
-
-async function login(page: Page, userKey = "E1001") {
-  const r = await page.request.post("/api/auth/mock-login", { headers: H, data: { user_key: userKey } });
-  expect(r.ok()).toBeTruthy();
-}
-
-async function createProject(api: APIRequestContext, name: string): Promise<number> {
-  const r = await api.post("/api/projects", {
-    headers: H,
-    data: {
-      name,
-      config: {
-        factors: [
-          { key: "temp", name: "온도", unit: "°C", low: 100, high: 200, step: 1 },
-          { key: "time", name: "시간", unit: "min", low: 10, high: 60, step: 5 },
-        ],
-        responses: [{ key: "yield", name: "수율", unit: "%", goal: "maximize", input_min: 0, input_max: 100, decimals: 1 }],
-        settings: { batch_size: 4, budget_runs: 30 },
-      },
-    },
-  });
-  expect(r.ok(), await r.text()).toBeTruthy();
-  const pid = (await r.json()).id as number;
-  const d = await api.post(`/api/projects/${pid}/design/initial`, { headers: H, data: { n_points: 6, replicate_fraction: 0 } });
-  expect(d.ok(), await d.text()).toBeTruthy();
-  return pid;
-}
-
-async function runs(api: APIRequestContext, pid: number): Promise<RunLite[]> {
-  const r = await api.get(`/api/projects/${pid}/runs`);
-  return ((await r.json()) as RunLite[]).sort((a, b) => a.run_order - b.run_order);
-}
-
-const cell = (page: Page, row: number, col: number) => page.locator(`#cell-${row}-${col}`);
-
-async function paste(page: Page, row: number, col: number, text: string) {
-  await cell(page, row, col).focus();
-  await cell(page, row, col).evaluate((el, t) => {
-    const dt = new DataTransfer();
-    dt.setData("text/plain", t);
-    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-  }, text);
-}
-
+/** ① 실험 데이터 입력의 실험 표. 입력 칸 순서: 조건(온도·시간, 언제든 수정) → 결과 → 메모 */
 async function openGrid(page: Page, pid: number) {
-  await page.goto(`/projects/${pid}/results`);
+  await page.goto(`/projects/${pid}/step/1`);
   await expect(cell(page, 0, 0)).toBeVisible();
 }
 
@@ -106,7 +62,7 @@ test("엑셀에서 여러 행·열을 붙여넣으면 자동 저장되고, 저�
   // '남은 실험만' 필터가 켜져 있어도, 방금 입력한 행이 저장 후 사라지거나 순서가 밀리면 안 된다
   await expect(cell(page, 0, COL.yield)).toHaveValue("81.5");
   await expect(cell(page, 2, COL.yield)).toHaveValue("83.25");
-  await expect(page.locator("tbody tr").first().locator("td").first()).toContainText(before[0].code);
+  await expect(page.locator(".grid-table tbody tr").first().locator("td").nth(1)).toContainText(before[0].code); // 0번 칸은 삭제 버튼
 });
 
 test("한 칸씩 입력하고 Enter로 내려가는 동안 자동 저장이 끼어들어도 입력 위치가 바뀌지 않는다", async ({ page }) => {
@@ -160,4 +116,22 @@ test("계획과 다른 실제 세팅값은 강조 표시된다", async ({ page }
   const changed = String(Number(planned) === 200 ? 199 : Number(planned) + 1);
   await cell(page, 0, COL.temp).fill(changed);
   await expect(cell(page, 0, COL.temp).locator("..")).toHaveClass(/\bdev\b/);
+});
+
+test("상태는 자동(대기·완료), 못 한 실험은 '못 함'으로 실패·실행불가 표시 후 되돌리기", async ({ page }) => {
+  const pid = await createProject(page.request, "E2E 못 함");
+  await openGrid(page, pid);
+  const status = page.getByLabel(`${(await runs(page.request, pid))[0].code} 상태`);
+  await expect(status).toContainText("대기");
+  await expect(page.locator(".grid-table select")).toHaveCount(0); // 상태 선택 상자 없음
+  await status.getByRole("button", { name: "못 함" }).click();
+  const dlg = page.getByRole("dialog");
+  await dlg.getByRole("radio", { name: /실행 불가/ }).click();
+  await dlg.getByRole("button", { name: "표시" }).click();
+  await expect(status).toContainText("실행불가");
+  expect((await runs(page.request, pid))[0].status).toBe("infeasible");
+  await status.getByRole("button", { name: "되돌리기" }).click();
+  await expect(status).toContainText("대기");
+  await cell(page, 0, COL.yield).fill("77");
+  await expect(status).toContainText("완료", { timeout: 15_000 });
 });

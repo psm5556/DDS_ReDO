@@ -77,6 +77,16 @@ class ProjectMember(Base):
     user: Mapped[User] = relationship(lazy="joined")
 
 
+class ProjectFavorite(Base):
+    """사용자별 즐겨찾기 (개인 설정, 다른 사람에게 보이지 않음)"""
+    __tablename__ = "project_favorites"
+    __table_args__ = (UniqueConstraint("project_id", "user_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class DesignBatch(Base):
     __tablename__ = "design_batches"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -97,7 +107,7 @@ class Run(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
     batch_id: Mapped[int] = mapped_column(ForeignKey("design_batches.id"), index=True)
-    code: Mapped[str] = mapped_column(String(40))  # 사람이 읽는 런 ID (예: B2-07)
+    code: Mapped[str] = mapped_column(String(40))  # 사람이 읽는 런 ID (예: 2차-07)
     replicate_no: Mapped[int] = mapped_column(Integer, default=1)
     run_order: Mapped[int] = mapped_column(Integer, default=0)
     is_replicate_of_existing: Mapped[bool] = mapped_column(Boolean, default=False)

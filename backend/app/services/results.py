@@ -124,10 +124,13 @@ def apply_row(db: Session, user: User, project: Project, cfg: ProjectConfig, run
         audit(db, user.id, "run.status", "run", run.id, frm=run.status, to=row.status)
         run.status = row.status
         changed = True
-    # 모든 응답이 입력되면 자동으로 완료 처리
-    if run.status in ("planned", "running"):
-        if all(current.get((run.id, r.key)) is not None and current[(run.id, r.key)].value is not None
-               for r in cfg.responses):
-            run.status = "done"
-            changed = True
+    # 모든 응답이 입력되면 자동으로 완료, 완료된 런에서 결과를 지우면 다시 대기(planned)
+    complete = all(current.get((run.id, r.key)) is not None and current[(run.id, r.key)].value is not None
+                   for r in cfg.responses)
+    if run.status in ("planned", "running") and complete:
+        run.status = "done"
+        changed = True
+    elif run.status == "done" and row.status is None and not complete:
+        run.status = "planned"
+        changed = True
     return changed

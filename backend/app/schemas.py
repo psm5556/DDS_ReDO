@@ -38,6 +38,9 @@ class ResponseDef(BaseModel):
     input_min: float | None = None  # 입력 허용 범위(오타 검출용)
     input_max: float | None = None
     decimals: int = Field(default=3, ge=0, le=8)
+    # 다목적 최적화: 중요도(0이면 관찰만 하고 최적화에는 쓰지 않음)와 응답별 최적화 기준(auto = 프로젝트 설정·규격에 따라)
+    weight: float = Field(default=1.0, ge=0, le=10)
+    criterion: Literal["auto", "spec_prob", "mean_k_sigma", "taguchi", "mean"] = "auto"
 
     @model_validator(mode="after")
     def _check(self) -> "ResponseDef":
@@ -48,6 +51,10 @@ class ResponseDef(BaseModel):
         if self.goal == "target" and self.target is not None:
             if (self.lsl is not None and self.target < self.lsl) or (self.usl is not None and self.target > self.usl):
                 raise ValueError(f"'{self.name}'의 목표값이 규격 범위 밖에 있습니다.")
+        if self.criterion == "spec_prob" and self.lsl is None and self.usl is None:
+            raise ValueError(f"'{self.name}'을 규격 만족 확률로 최적화하려면 규격(LSL 또는 USL)이 필요합니다.")
+        if self.criterion == "taguchi" and self.goal != "target":
+            raise ValueError(f"'{self.name}': 품질 손실 기준은 목표값(망목) 특성에만 쓸 수 있습니다.")
         return self
 
 
@@ -133,6 +140,8 @@ class ProjectUpdate(BaseModel):
     status: Literal["active", "completed", "archived"] | None = None
     config: ProjectConfig | None = None
     change_reason: str = ""
+    # 실험 데이터가 있는 DOE에 인자를 추가할 때: 기존 실험에서 그 인자를 고정해 둔 값 (인자 key → 값)
+    new_factor_values: dict[str, float] = {}
 
 
 class ProjectSummary(BaseModel):
@@ -151,6 +160,9 @@ class ProjectSummary(BaseModel):
     updated_at: datetime
     deleted_at: datetime | None = None
     primary_response: str | None = None
+    is_favorite: bool = False  # 현재 사용자의 즐겨찾기
+    member_count: int = 0  # 소유자 외 협업자 수
+    active_shares: int = 0  # 유효한 예측 공유 수 (소유자에게만 제공)
 
 
 class ProjectDetail(ProjectSummary):

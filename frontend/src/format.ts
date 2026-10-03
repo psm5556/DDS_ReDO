@@ -42,7 +42,7 @@ export function when(iso: string | null | undefined): string {
 }
 export const ROLE_LABEL: Record<string, string> = { owner: "소유자", editor: "편집자", runner: "실험자", viewer: "열람자" };
 export const STATUS_LABEL: Record<string, string> = {
-  planned: "계획", running: "진행중", done: "완료", failed: "실패", infeasible: "실행불가", excluded: "제외",
+  planned: "대기", running: "대기", done: "완료", failed: "실패", infeasible: "실행불가", excluded: "제외",
 };
 export const PROJECT_STATUS: Record<string, string> = { active: "진행 중", completed: "완료", archived: "보관" };
 export const GOAL_LABEL: Record<string, string> = { maximize: "클수록 좋음 (망대)", minimize: "작을수록 좋음 (망소)", target: "목표값에 맞춤 (망목)" };

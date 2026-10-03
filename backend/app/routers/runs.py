@@ -34,6 +34,11 @@ def _run_out(run: Run, seq: int, cfg: ProjectConfig, meas: dict) -> RunOut:
                   updated_at=run.updated_at)
 
 
+def run_code(seq: int, n: int) -> str:
+    """사람이 읽는 런 ID: '{차수}차-{번호}' (예: 2차-07)"""
+    return f"{seq}차-{n:02d}"
+
+
 def _seq_map(db: Session, project_id: int) -> dict[int, int]:
     return {b.id: b.seq for b in db.scalars(select(DesignBatch).where(DesignBatch.project_id == project_id))}
 
@@ -58,7 +63,7 @@ def create_batch(db: Session, user: User, project: Project, cfg: ProjectConfig, 
     for pos, idx in enumerate(order):
         pt = points[int(idx)]
         x = sp.to_dicts(sp.snap(sp.from_dicts([pt["x"]])))[0]
-        db.add(Run(project_id=project.id, batch_id=b.id, code=f"B{seq}-{pos + 1:02d}", replicate_no=pt.get("replicate_no", 1),
+        db.add(Run(project_id=project.id, batch_id=b.id, code=run_code(seq, pos + 1), replicate_no=pt.get("replicate_no", 1),
                    run_order=pos + 1, is_replicate_of_existing=pt.get("kind") == "replicate", status="planned",
                    planned=x, actual=dict(x), reason=pt.get("reason", "")))
     audit(db, user.id, "batch.create", "project", project.id, batch=seq, kind=kind, runs=len(points))
@@ -144,7 +149,7 @@ def list_runs(project_id: int, batch_id: int | None = None, status: str | None =
               user: User = Depends(get_current_user)) -> list[RunOut]:
     p, _ = require_project(db, user, project_id)
     cfg = project_config(p)
-    stmt = select(Run).where(Run.project_id == p.id)
+    stmt = select(Run).where(Run.project_id == p.id, Run.status != "excluded")  # 삭제한 런은 보이지 않음
     if batch_id:
         stmt = stmt.where(Run.batch_id == batch_id)
     if status:
@@ -219,6 +224,20 @@ def save_results(project_id: int, body: ResultsIn, db: Session = Depends(get_db)
                      for i in dict.fromkeys(ids)]}
 
 
+@router.delete("/runs/{run_id}")
+def delete_run(project_id: int, run_id: int, db: Session = Depends(get_db),
+               user: User = Depends(get_current_user)) -> dict:
+    """런 삭제: 표와 학습에서 빠진다. 측정값·이력은 지우지 않고 '삭제됨'(excluded)으로만 표시해 복구할 수 있게 둔다."""
+    p, _ = require_project(db, user, project_id, "editor")
+    r = db.get(Run, run_id)
+    if r is None or r.project_id != p.id or r.status == "excluded":
+        raise HTTPException(404, "런을 찾을 수 없습니다.")
+    audit(db, user.id, "run.delete", "project", p.id, run=r.code, status=r.status)
+    r.status = "excluded"
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/runs/{run_id}/exclude")
 def exclude(project_id: int, run_id: int, body: ExcludeIn, db: Session = Depends(get_db),
             user: User = Depends(get_current_user)) -> dict:
@@ -250,7 +269,7 @@ def runsheet(project_id: int, batch_id: int | None = None, db: Session = Depends
     seq = _seq_map(db, p.id)
     runs.sort(key=lambda r: (seq.get(r.batch_id, 0), r.run_order))
     data = build_runsheet(p, cfg, runs, seq, current_measurements(db, [r.id for r in runs]))
-    name = f"ReDO_{p.id}_" + (f"B{seq.get(batch_id, '')}" if batch_id else "all") + ".xlsx"
+    name = f"ReDO_{p.id}_" + (f"{seq.get(batch_id, '')}차" if batch_id else "all") + ".xlsx"
     return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})
 

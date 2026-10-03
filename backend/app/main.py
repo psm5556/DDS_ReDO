@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings, validate_settings
 from .db import Base, engine
-from .routers import analysis, auth, meta, projects, runs, sharing
+from .routers import analysis, auth, meta, optimize, projects, runs, sharing
 
 log = logging.getLogger("redo")
 
@@ -22,6 +22,10 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     s = get_settings()
     validate_settings(s)
     Base.metadata.create_all(engine)  # 사내 개발 시 Alembic 마이그레이션으로 대체
+    from .db import SessionLocal
+    from .migrations import migrate_run_codes
+    with SessionLocal() as db:
+        migrate_run_codes(db)
     if s.env == "dev":
         from .seed import seed_if_empty
         seed_if_empty()
@@ -52,7 +56,7 @@ async def unhandled(request: Request, exc: Exception):  # type: ignore[no-untype
     return JSONResponse({"detail": "서버에서 문제가 발생했습니다. 잠시 후 다시 시도하세요."}, status_code=500)
 
 
-for r in (auth.router, meta.router, projects.router, runs.router, analysis.router, sharing.router):
+for r in (auth.router, meta.router, projects.router, runs.router, analysis.router, optimize.router, sharing.router):
     app.include_router(r)
 
 

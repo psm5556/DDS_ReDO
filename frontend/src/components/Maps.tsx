@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Shape } from "plotly.js";
 import { fmtFactor, snap } from "../format";
-import { usePrefs } from "../prefs";
 import type { Effect, FactorDef, ResponseDef, Surface } from "../types";
 import { baseLayout, COLORS, Plot, plotConfig, SCALE_EPI, SCALE_MEAN, SCALE_PROB, SCALE_SIGMA } from "./Plot";
 
@@ -57,7 +56,6 @@ export function TwinMaps({ factors, resp, load, initial, initialFixed, allowChan
   factors: FactorDef[]; resp: ResponseDef; load?: Loader; initial?: Surface | null;
   initialFixed?: Record<string, number>; allowChange?: boolean;
 }) {
-  const { expert } = usePrefs();
   const [xk, setXk] = useState(initial?.x.key ?? factors[0]?.key);
   const [yk, setYk] = useState(initial?.y.key ?? factors[1]?.key);
   const [fixed, setFixed] = useState<Record<string, number>>(() => {
@@ -138,13 +136,11 @@ export function TwinMaps({ factors, resp, load, initial, initialFixed, allowChan
                 {view === "epi" && <><b className="e">모델 불확실성</b><span className="muted">데이터가 부족한 정도</span></>}
                 {view === "prob" && <><b style={{ color: "var(--ok)" }}>규격 만족 확률</b></>}
                 <span style={{ flex: 1 }} />
-                {expert && (
-                  <span className="seg">
+                <span className="seg">
                     <button className={`small ${view === "sigma" ? "on" : ""}`} onClick={() => setView("sigma")}>σ</button>
                     <button className={`small ${view === "epi" ? "on" : ""}`} onClick={() => setView("epi")}>불확실성</button>
                     {surf.spec_prob && <button className={`small ${view === "prob" ? "on" : ""}`} onClick={() => setView("prob")}>확률</button>}
                   </span>
-                )}
               </div>
               {view === "sigma" && <MapPlot s={surf} z={surf.sigma} scale={SCALE_SIGMA} title="σ" unit={u} height={h} />}
               {view === "epi" && <MapPlot s={surf} z={surf.epistemic_sd} scale={SCALE_EPI} title="불확실성(표준편차)" unit={u} height={h} />}

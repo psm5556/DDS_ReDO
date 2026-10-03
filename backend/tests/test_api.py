@@ -12,7 +12,7 @@ from app.seed import seed
 def _demo_id(c):
     r = c.get("/api/projects?scope=mine")
     assert r.status_code == 200
-    return next(p["id"] for p in r.json() if "데모" in p["name"])
+    return next(p["id"] for p in r.json() if p["name"] == "Poly-Si 식각 레시피 개발 (데모)")
 
 
 def test_requires_login(seeded):
@@ -206,3 +206,153 @@ def test_proposal_matching_pending_run_is_marked_replicate(client_for):
         assert p["kind"] == "replicate" and "진행 중 런" in p["reason"]
     for p in props:  # 제안 예측값은 실제 데이터 기준이므로 산포가 0 근처로 붕괴하지 않음
         assert p["sigma"] > 3.0 and p["mean_hi"] - p["mean_lo"] > 5.0
+
+
+def test_favorite_toggle_and_markers(client_for):
+    owner = client_for("E1001")
+    pid = _demo_id(owner)
+    assert owner.put(f"/api/projects/{pid}/favorite").json() == {"favorite": True}
+    owner.put(f"/api/projects/{pid}/favorite")  # 두 번 눌러도 하나만
+    p = next(x for x in owner.get("/api/projects?scope=mine").json() if x["id"] == pid)
+    assert p["is_favorite"] and p["member_count"] >= 1 and p["active_shares"] >= 1
+    # 즐겨찾기는 개인 설정: 같은 프로젝트의 다른 멤버에게는 보이지 않음, 공유 수는 소유자에게만
+    runner = client_for("E1002")
+    q = next(x for x in runner.get("/api/projects?scope=member").json() if x["id"] == pid)
+    assert not q["is_favorite"] and q["active_shares"] == 0
+    assert owner.delete(f"/api/projects/{pid}/favorite").json() == {"favorite": False}
+    assert not owner.get(f"/api/projects/{pid}").json()["is_favorite"]
+
+
+def test_favorite_requires_access(client_for):
+    owner = client_for("E1001")
+    pid = _demo_id(owner)
+    other = client_for("E2001")  # 다른 사업부, 멤버 아님
+    assert other.put(f"/api/projects/{pid}/favorite").status_code == 404
+    assert other.delete(f"/api/projects/{pid}/favorite").status_code == 404
+
+
+def test_multi_objective_endpoints(client_for):
+    seed(reset=True)
+    owner = client_for("E1001")
+    pid = _demo_id(owner)
+    r = owner.post(f"/api/projects/{pid}/optimize", json={"validate_model": False})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert {d["key"] for d in body["responses"]} == {"etch_rate", "uniformity"}
+    assert {x["key"] for x in body["best"]["responses"]} == {"etch_rate", "uniformity"}
+    assert 0 <= body["best"]["desirability"] <= 1.5
+    rec = owner.post(f"/api/projects/{pid}/recommend-multi", json={"batch_size": 3})
+    assert rec.status_code == 200, rec.text
+    assert len(rec.json()["proposals"]) == 3
+    # 권한: 열람자는 결과는 보지만 제안은 못 받는다, 다른 사업부는 존재 자체를 모른다
+    viewer = client_for("E1003")
+    assert viewer.post(f"/api/projects/{pid}/optimize", json={"validate_model": False}).status_code == 200
+    assert viewer.post(f"/api/projects/{pid}/recommend-multi", json={}).status_code == 403
+    other = client_for("E2001")
+    assert other.post(f"/api/projects/{pid}/optimize", json={}).status_code == 404
+
+
+def test_add_factor_to_project_with_data(client_for):
+    seed(reset=True)
+    owner = client_for("E1001")
+    pid = _demo_id(owner)
+    p = owner.get(f"/api/projects/{pid}").json()
+    cfg = p["config"]
+    cfg["factors"].append({"key": "temp", "name": "척 온도", "unit": "°C", "low": 20, "high": 80, "step": 1, "scale": "linear"})
+    # 기존 실험 값이 없으면 거부
+    r = owner.patch(f"/api/projects/{pid}", json={"config": cfg})
+    assert r.status_code == 422 and "기존 실험 값" in r.json()["detail"]
+    # 범위 밖이면 거부
+    assert owner.patch(f"/api/projects/{pid}", json={"config": cfg, "new_factor_values": {"temp": 200}}).status_code == 422
+    before = owner.post(f"/api/projects/{pid}/optimize", json={"validate_model": False}).json()["responses"][0]["data"]["n_obs"]
+    r = owner.patch(f"/api/projects/{pid}", json={"config": cfg, "new_factor_values": {"temp": 40}})
+    assert r.status_code == 200, r.text
+    runs = owner.get(f"/api/projects/{pid}/runs").json()
+    assert all(run["planned"]["temp"] == 40 for run in runs)
+    # 기존 데이터가 학습에서 빠지지 않는다
+    after = owner.post(f"/api/projects/{pid}/optimize", json={"validate_model": False}).json()
+    assert after["responses"][0]["data"]["n_obs"] == before
+    assert "temp" in after["best"]["x"]
+    seed(reset=True)
+
+
+def test_second_demo_multi_response(client_for):
+    seed(reset=True)
+    owner = client_for("E1001")
+    ps = owner.get("/api/projects?scope=mine").json()
+    cmp = next(p for p in ps if p["name"] == "CMP 슬러리 배합 최적화 (데모)")
+    assert cmp["runs_done"] > 0 and cmp["runs_open"] == 0  # 첫 DOE 결과가 모두 입력된 상태 → 바로 ② 학습 결과
+    body = owner.post(f"/api/projects/{cmp['id']}/optimize", json={"validate_model": False}).json()
+    assert len(body["best"]["responses"]) == 3
+    assert body["best"]["desirability"] < 0.95, "응답끼리 충돌하므로 모두 완벽히 만족하지는 못해야 예제로서 의미가 있음"
+    assert {a["why"] for a in body["alternatives"]} >= {"제거율 우선", "디싱 우선", "결함 수 우선"}
+
+
+def test_predict_multi_all_responses(client_for):
+    seed(reset=True)
+    owner = client_for("E1001")
+    pid = _demo_id(owner)
+    x = {"rf_power": 530, "pressure": 41, "cl2_flow": 75}
+    r = owner.post(f"/api/projects/{pid}/predict-multi", json={"points": [x, {**x, "pressure": 79}]})
+    assert r.status_code == 200, r.text
+    a, b = r.json()
+    assert {p["key"] for p in a["responses"]} == {"etch_rate", "uniformity"}
+    assert 0 <= a["desirability"] <= 1.5
+    assert a["desirability"] > b["desirability"], "압력이 높으면 산포가 커져 목표 달성이 떨어져야 함(데모 공정)"
+    other = client_for("E2001")
+    assert other.post(f"/api/projects/{pid}/predict-multi", json={"points": [x]}).status_code == 404
+
+
+def test_run_codes_are_korean_round_format(client_for):
+    seed(reset=True)
+    owner = client_for("E1001")
+    pid = _demo_id(owner)
+    codes = [r["code"] for r in owner.get(f"/api/projects/{pid}/runs").json()]
+    assert "1차-01" in codes and "2차-01" in codes and not any(c.startswith("B") for c in codes)
+    # 예전 형식이 남아 있던 DB도 시작할 때 바뀐다
+    from app.db import SessionLocal
+    from app.migrations import migrate_run_codes
+    from app.models import Run
+    with SessionLocal() as db:
+        run = db.query(Run).filter(Run.code == "1차-01").first()
+        run.code = "B1-01"
+        db.commit()
+        assert migrate_run_codes(db) == 1
+        assert db.get(Run, run.id).code == "1차-01"
+
+
+def test_clearing_results_returns_run_to_planned(client_for):
+    seed(reset=True)
+    owner = client_for("E1001")
+    pid = _demo_id(owner)
+    run = next(r for r in owner.get(f"/api/projects/{pid}/runs").json() if r["status"] == "planned")
+    r = owner.post(f"/api/projects/{pid}/results", json={"rows": [{"run_id": run["id"], "values": {"etch_rate": 320, "uniformity": 3}}]})
+    assert next(x for x in r.json()["runs"])["status"] == "done"
+    r = owner.post(f"/api/projects/{pid}/results", json={"rows": [{"run_id": run["id"], "values": {"etch_rate": None}}]})
+    assert next(x for x in r.json()["runs"])["status"] == "planned"
+
+
+def test_delete_run_soft_and_authorized(client_for):
+    seed(reset=True)
+    owner = client_for("E1001")
+    pid = _demo_id(owner)
+    runs = owner.get(f"/api/projects/{pid}/runs").json()
+    done = next(r for r in runs if r["status"] == "done")
+    before = owner.get(f"/api/projects/{pid}").json()
+    runner = client_for("E1002")
+    assert runner.delete(f"/api/projects/{pid}/runs/{done['id']}").status_code == 403  # 실험자는 삭제 불가
+    other = client_for("E2001")
+    assert other.delete(f"/api/projects/{pid}/runs/{done['id']}").status_code == 404
+    assert owner.delete(f"/api/projects/{pid}/runs/{done['id']}").status_code == 200
+    after_runs = owner.get(f"/api/projects/{pid}/runs").json()
+    assert done["id"] not in {r["id"] for r in after_runs}
+    after = owner.get(f"/api/projects/{pid}").json()
+    assert after["runs_total"] == before["runs_total"] - 1 and after["runs_done"] == before["runs_done"] - 1
+    assert owner.delete(f"/api/projects/{pid}/runs/{done['id']}").status_code == 404  # 두 번 삭제 불가
+    # 기록은 남는다 (복구 가능)
+    from app.db import SessionLocal
+    from app.models import AuditLog, Measurement, Run
+    with SessionLocal() as db:
+        assert db.get(Run, done["id"]).status == "excluded"
+        assert db.query(Measurement).filter(Measurement.run_id == done["id"]).count() > 0
+        assert db.query(AuditLog).filter(AuditLog.action == "run.delete").count() == 1

@@ -11,7 +11,7 @@ from ..auth.deps import get_current_user
 from ..authz import require_project
 from ..config import get_settings
 from ..db import get_db
-from ..models import AuditLog, Project, ProjectMember, Run, User
+from ..models import AuditLog, Project, ProjectFavorite, ProjectMember, Run, User
 from ..schemas import (MemberIn, MemberOut, ProjectConfig, ProjectCreate, ProjectDetail, ProjectSummary, ProjectUpdate,
                        TransferIn)
 from ..services.common import project_config, project_summary, user_out
@@ -19,8 +19,8 @@ from ..services.common import project_config, project_summary, user_out
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
-def _detail(db: Session, p: Project, role: str) -> ProjectDetail:
-    s = project_summary(db, p, role)
+def _detail(db: Session, p: Project, role: str, user_id: int | None = None) -> ProjectDetail:
+    s = project_summary(db, p, role, user_id)
     cfg = project_config(p)
     warns = []
     if p.deleted_at:
@@ -52,7 +52,7 @@ def list_projects(scope: str = "mine", q: str = "", status: str = "", db: Sessio
         role = "owner" if p.owner_id == user.id else (
             db.scalar(select(ProjectMember.role).where(ProjectMember.project_id == p.id,
                                                        ProjectMember.user_id == user.id)) or "viewer")
-        out.append(project_summary(db, p, role))
+        out.append(project_summary(db, p, role, user.id))
     return out
 
 
@@ -65,13 +65,13 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db),
     db.flush()
     audit(db, user.id, "project.create", "project", p.id)
     db.commit()
-    return _detail(db, p, "owner")
+    return _detail(db, p, "owner", user.id)
 
 
 @router.get("/{project_id}", response_model=ProjectDetail)
 def get_project(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> ProjectDetail:
     p, role = require_project(db, user, project_id, allow_deleted=True)
-    return _detail(db, p, role)
+    return _detail(db, p, role, user.id)
 
 
 @router.patch("/{project_id}", response_model=ProjectDetail)
@@ -99,16 +99,31 @@ def update_project(project_id: int, body: ProjectUpdate, db: Session = Depends(g
             old_r = {r.key for r in old.responses}
             if not old_f <= new_f:
                 raise HTTPException(409, "실험 데이터가 있는 프로젝트에서는 인자를 삭제할 수 없습니다. 새 DOE로 복제해서 시작하세요.")
-            if new_f - old_f:
-                raise HTTPException(409, "실험 데이터가 있는 프로젝트에 인자를 추가하면 기존 런에 값이 없습니다. 새 DOE로 복제해서 시작하세요.")
             if not old_r <= {r.key for r in new.responses}:
                 raise HTTPException(409, "실험 데이터가 있는 응답은 삭제할 수 없습니다.")
+            added = [f for f in new.factors if f.key in new_f - old_f]
+            missing = [f.name for f in added if f.key not in body.new_factor_values]
+            if missing:
+                raise HTTPException(422, f"새 인자 '{', '.join(missing)}'의 기존 실험 값(그동안 고정해 둔 값)을 입력하세요.")
+            fill: dict[str, float] = {}
+            for f in added:
+                v = float(body.new_factor_values[f.key])
+                if not (f.low <= v <= f.high):
+                    raise HTTPException(422, f"'{f.name}'의 기존 실험 값 {v:g}이(가) 범위({f.low:g}~{f.high:g}) 밖입니다.")
+                fill[f.key] = v
+            if fill:
+                # 기존 런에는 새 인자를 그동안 고정해 둔 값으로 채워 학습 데이터에서 빠지지 않게 한다
+                for run in db.scalars(select(Run).where(Run.project_id == p.id)):
+                    run.planned = {**run.planned, **fill}
+                    if run.actual:
+                        run.actual = {**run.actual, **fill}
+                changes["added_factors"] = fill
         p.config = new.model_dump()
         changes["config"] = True
         changes["reason"] = body.change_reason
     audit(db, user.id, "project.update", "project", p.id, **changes)
     db.commit()
-    return _detail(db, p, role)
+    return _detail(db, p, role, user.id)
 
 
 @router.post("/{project_id}/duplicate", response_model=ProjectDetail)
@@ -120,7 +135,7 @@ def duplicate(project_id: int, db: Session = Depends(get_db), user: User = Depen
     db.flush()
     audit(db, user.id, "project.duplicate", "project", n.id, source=p.id)
     db.commit()
-    return _detail(db, n, "owner")
+    return _detail(db, n, "owner", user.id)
 
 
 @router.delete("/{project_id}")
@@ -138,7 +153,7 @@ def restore(project_id: int, db: Session = Depends(get_db), user: User = Depends
     p.deleted_at = None
     audit(db, user.id, "project.restore", "project", p.id)
     db.commit()
-    return _detail(db, p, role)
+    return _detail(db, p, role, user.id)
 
 
 # ---------- 멤버 ----------
@@ -175,6 +190,7 @@ def remove_member(project_id: int, user_id: int, db: Session = Depends(get_db),
                   user: User = Depends(get_current_user)) -> list[MemberOut]:
     p, _ = require_project(db, user, project_id, "owner")
     db.execute(delete(ProjectMember).where(ProjectMember.project_id == p.id, ProjectMember.user_id == user_id))
+    db.execute(delete(ProjectFavorite).where(ProjectFavorite.project_id == p.id, ProjectFavorite.user_id == user_id))
     audit(db, user.id, "member.remove", "project", p.id, member=user_id)
     db.commit()
     return members(project_id, db, user)
@@ -201,7 +217,7 @@ def transfer(project_id: int, body: TransferIn, db: Session = Depends(get_db),
     db.commit()
     db.refresh(p)
     role = "owner" if p.owner_id == user.id else "editor"
-    return _detail(db, p, role)
+    return _detail(db, p, role, user.id)
 
 
 @router.get("/{project_id}/audit")
@@ -214,3 +230,21 @@ def audit_log(project_id: int, db: Session = Depends(get_db), user: User = Depen
         u = db.get(User, a.user_id) if a.user_id else None
         out.append({"action": a.action, "user": u.name if u else None, "detail": a.detail, "at": a.created_at})
     return out
+
+
+@router.put("/{project_id}/favorite")
+def add_favorite(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
+    p, _ = require_project(db, user, project_id)
+    if db.scalar(select(ProjectFavorite.id).where(ProjectFavorite.project_id == p.id,
+                                                  ProjectFavorite.user_id == user.id)) is None:
+        db.add(ProjectFavorite(project_id=p.id, user_id=user.id))
+        db.commit()
+    return {"favorite": True}
+
+
+@router.delete("/{project_id}/favorite")
+def remove_favorite(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
+    p, _ = require_project(db, user, project_id)
+    db.execute(delete(ProjectFavorite).where(ProjectFavorite.project_id == p.id, ProjectFavorite.user_id == user.id))
+    db.commit()
+    return {"favorite": False}

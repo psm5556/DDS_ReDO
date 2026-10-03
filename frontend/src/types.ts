@@ -11,6 +11,7 @@ export interface ResponseDef {
   key: string; name: string; unit: string; goal: "maximize" | "minimize" | "target";
   target?: number | null; lsl?: number | null; usl?: number | null;
   input_min?: number | null; input_max?: number | null; decimals: number;
+  weight?: number; criterion?: "auto" | "spec_prob" | "mean_k_sigma" | "taguchi" | "mean";
 }
 export interface ProjectSettings {
   mode: "explore" | "optimize" | "robust"; robust_objective: "spec_prob" | "taguchi" | "mean_k_sigma"; k_sigma: number;
@@ -22,6 +23,7 @@ export interface ProjectSummary {
   id: number; name: string; description: string; status: string; tags: string[]; owner: User;
   business_unit?: string | null; my_role: Role; runs_total: number; runs_done: number; runs_open: number;
   batches: number; updated_at: string; deleted_at?: string | null; primary_response?: string | null;
+  is_favorite: boolean; member_count: number; active_shares: number;
 }
 export interface ProjectDetail extends ProjectSummary { config: ProjectConfig; warnings: string[]; }
 export interface Batch {
@@ -80,3 +82,31 @@ export interface Share {
 }
 export interface Member { user: User; role: Role; }
 export interface OpenRun { project_id: number; project_name: string; run: Run; factors: FactorDef[]; my_role: Role; }
+
+// ---------- 다목적 레시피 최적화 (POST /optimize, /recommend-multi) ----------
+export interface RespPred {
+  key: string; name: string; unit: string; goal: ResponseDef["goal"]; weight: number; criterion: string;
+  mean: number; mean_lo: number; mean_hi: number; sigma: number; sigma_lo: number; sigma_hi: number;
+  obs_lo: number; obs_hi: number; spec_prob: number | null; desirability: number;
+}
+export interface RecipeOption {
+  x: Record<string, number>; desirability: number; why: string; extrapolation: boolean; already_tested: boolean; responses: RespPred[];
+}
+export interface RespDiag {
+  key: string; name: string; unit: string; weight: number; data: { n_points: number; n_obs: number; n_replicated_points: number };
+  skipped?: string; criterion?: string; variance_reliability?: "ok" | "low" | "none";
+  validation?: { available?: boolean; rmse?: number; coverage95?: number; status?: string } | null;
+  warnings?: string[]; tentative?: boolean;
+}
+export interface OptimizeResult {
+  surrogate: Surrogate; responses: RespDiag[]; best: RecipeOption; alternatives: RecipeOption[]; tentative: boolean;
+  pending_runs: number; decomposition_is_approximate: boolean; pool_size: number; elapsed_sec: number;
+}
+export interface MultiProposal {
+  x: Record<string, number>; kind: "new" | "replicate"; reason_type: "explore" | "exploit" | "replicate"; reason: string;
+  acquisition?: number; desirability?: number; extrapolation?: boolean; responses?: RespPred[]; manual?: string;
+}
+export interface MultiRecommend {
+  surrogate: Surrogate; surrogate_version: string; mode: string; objective: string; incumbent: number; pool_size: number;
+  notes: string[]; proposals: MultiProposal[]; elapsed_sec: number; pending_runs: number; decomposition_is_approximate: boolean;
+}

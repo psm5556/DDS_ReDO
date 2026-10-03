@@ -1,19 +1,28 @@
-import { useEffect, type ReactNode } from "react";
+import { X } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
+
+// 모달이 겹쳐 열리면 Esc는 맨 위 모달만 닫는다
+const openModals: number[] = [];
+let modalSeq = 0;
 
 export function Modal({ title, onClose, children, footer, wide }: {
   title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean;
 }) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const id = ++modalSeq;
+    openModals.push(id);
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape" && openModals[openModals.length - 1] === id) closeRef.current(); };
     window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+    return () => { window.removeEventListener("keydown", h); openModals.splice(openModals.indexOf(id), 1); };
+  }, []);
   return (
     <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`modal ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <h3>{title}</h3>
-          <button className="ghost small" onClick={onClose} aria-label="닫기">닫기</button>
+          <button className="icon-btn" onClick={onClose} aria-label="닫기" title="닫기"><X size={16} /></button>
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}

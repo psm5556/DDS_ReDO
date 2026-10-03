@@ -58,7 +58,7 @@ export default function PrintPage() {
   return (
     <>
       <div className="no-print row" style={{ padding: "12px 20px", borderBottom: "1px solid var(--line-2)", background: "var(--panel)" }}>
-        <Link to={`/projects/${project.id}/plan`}>← 실험 계획으로</Link>
+        <Link to={`/projects/${project.id}/step/1`}>← 실험하기로</Link>
         <div style={{ flex: 1 }} />
         <label className="check small">
           <input type="checkbox" checked={includeDone} onChange={(e) => setIncludeDone(e.target.checked)} />
