@@ -117,6 +117,7 @@ def propose_batch(space: Space, data: TrainingData, pending: np.ndarray, make_mo
     model.fit(believer, seed=seed)
     pool = build_pool(space, data, model, obj, pool_size, seed)
     observed = {space.point_key(r) for r in data.X_pts}
+    pending_keys = {space.point_key(r) for r in pending} if len(pending) else set()
     chosen: list[int] = []
     proposals: list[Proposal] = []
     pred_obs = model.predict(data.X_pts)
@@ -151,11 +152,12 @@ def propose_batch(space: Space, data: TrainingData, pending: np.ndarray, make_mo
         p1 = shown.take([j])
         es = float(expected_score(p1, obj)[0]) if obj.mode != "explore" else float("nan")
         key = space.point_key(pool[i])
-        kind = "replicate" if key in observed else "new"
+        kind = "replicate" if key in observed or key in pending_keys else "new"
         lo, hi = p1.mean_interval()
         sp = p1.spec_probability(obj.lsl, obj.usl)[0] if (obj.lsl is not None or obj.usl is not None) else None
         reason_type, reason = _explain(kind, obj, es, incumbent, float(p1.aleatoric_var[0]), alea_med,
-                                       float(p1.epistemic_var[0]), float(p1.aleatoric_var[0]), bool(extrap[i]))
+                                       float(p1.epistemic_var[0]), float(p1.aleatoric_var[0]), bool(extrap[i]),
+                                       pending=key in pending_keys and key not in observed)
         proposals.append(Proposal(
             x=space.to_dicts(pool[i])[0], kind=kind, reason_type=reason_type, reason=reason,
             acquisition=a, mean=float(p1.mean[0]), mean_lo=float(lo[0]), mean_hi=float(hi[0]),
@@ -167,7 +169,10 @@ def propose_batch(space: Space, data: TrainingData, pending: np.ndarray, make_mo
 
 
 def _explain(kind: str, obj: Objective, es: float, incumbent: float, alea: float, alea_med: float, epi: float,
-             alea_v: float, extrap: bool) -> tuple[str, str]:
+             alea_v: float, extrap: bool, pending: bool = False) -> tuple[str, str]:
+    if pending:
+        return "replicate", ("아직 결과가 없는 진행 중 런과 같은 조건입니다. 유망한 조건이라 반복 측정으로 산포까지 "
+                             "확인하도록 한 번 더 넣었습니다. 필요 없으면 빼도 됩니다.")
     if kind == "replicate":
         return "replicate", "이미 실험한 조건입니다. 결과가 유망하지만 산포 추정이 불확실해서 반복 측정으로 확인합니다."
     if obj.mode == "explore":

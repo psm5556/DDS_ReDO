@@ -84,3 +84,33 @@ def test_spec_probability_bounds():
     p = m.predict(np.random.default_rng(0).random((50, 2)))
     prob = p.spec_probability(5.0, 9.0)
     assert np.all((prob >= 0) & (prob <= 1))
+
+
+def test_virtual_observations_excluded_from_replicate_variance():
+    """Kriging Believer 가상 관측은 평균 모델의 관측 수에는 들어가지만 산포(s²) 추정에는 들어가지 않는다."""
+    d = make_data(n_pts=16)
+    p = int(np.argmax(d.n))  # 반복이 있는 점
+    q = int(np.argmin(d.n))  # 1회만 측정한 점
+    b = d.with_extra(d.X_pts[[p, p, q]], np.array([d.y_mean[p], d.y_mean[p], d.y_mean[q]]))
+    assert b.n[p] == d.n[p] + 2 and b.n_real[p] == d.n[p]
+    assert b.s2[p] == d.s2[p], "가상 관측(=예측 평균)이 표본분산을 줄이면 안 됨"
+    assert np.isnan(b.s2[q]) and b.n_real[q] == 1, "가상 관측으로 반복점이 생기면 안 됨"
+    assert b.n_replicated_points == d.n_replicated_points
+    # 제외해도 가상 관측 표시가 유지됨
+    assert b.without_point(0).virtual.sum() == 3 - int(q == 0) - 2 * int(p == 0)
+
+
+def test_believer_does_not_shrink_predicted_sigma():
+    """가상 관측을 넣은 점에서 모델 불확실성은 줄되, 산포(σ) 예측은 실제 데이터 기준과 비슷해야 한다."""
+    d = make_data(n_pts=16)
+    x = np.array([[0.85, 0.2]])
+    base = HeteroscedasticGP()
+    base.fit(d)
+    p0 = base.predict(x)
+    b = d.with_extra(np.repeat(x, 3, axis=0), np.repeat(p0.mean, 3))
+    m = HeteroscedasticGP()
+    m.fit(b)
+    p1 = m.predict(x)
+    assert p1.epistemic_var[0] < p0.epistemic_var[0]
+    assert 0.7 < p1.sigma[0] / p0.sigma[0] < 1.4
+

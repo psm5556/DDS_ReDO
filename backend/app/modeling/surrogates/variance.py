@@ -17,8 +17,8 @@ class LogVarTargets:
 
 
 def log_var_targets(data: TrainingData, X_unit_pts: np.ndarray) -> LogVarTargets:
-    m = (data.n >= 2) & np.isfinite(data.s2) & (data.s2 > 0)
-    df = data.n[m] - 1.0
+    m = (data.n_real >= 2) & np.isfinite(data.s2) & (data.s2 > 0)
+    df = data.n_real[m] - 1.0
     # E[log s²] = log σ² + ψ(df/2) - log(df/2)  → 편향 보정
     z = np.log(data.s2[m]) - (digamma(df / 2.0) - np.log(df / 2.0))
     noise = polygamma(1, df / 2.0)
@@ -27,10 +27,10 @@ def log_var_targets(data: TrainingData, X_unit_pts: np.ndarray) -> LogVarTargets
 
 def pooled_log_var(data: TrainingData) -> tuple[float, float] | None:
     """반복점이 적을 때: 합동분산(pooled variance)의 log 값과 그 표준편차."""
-    m = (data.n >= 2) & np.isfinite(data.s2)
+    m = (data.n_real >= 2) & np.isfinite(data.s2)
     if not np.any(m):
         return None
-    df = data.n[m] - 1.0
+    df = data.n_real[m] - 1.0
     s2p = float(np.sum(df * data.s2[m]) / np.sum(df))
     if s2p <= 0:
         s2p = 1e-12

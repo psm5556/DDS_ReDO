@@ -6,6 +6,7 @@ import pytest
 from tests.conftest import H
 
 from app.config import Settings, validate_settings
+from app.seed import seed
 
 
 def _demo_id(c):
@@ -190,3 +191,18 @@ def test_user_search_requires_query(client_for):
     assert c.get("/api/users/search?q=").json() == []
     assert c.get("/api/users/search?q=%20").json() == []
     assert [u["user_key"] for u in c.get("/api/users/search?q=김서연").json()] == ["E1001"]
+
+
+def test_proposal_matching_pending_run_is_marked_replicate(client_for):
+    """데모 초기 상태에서는 2차 배치(진행 중) 런과 같은 조건이 다시 제안된다. 이때 '신규'가 아니라 반복으로 표시해야 한다."""
+    seed(reset=True)  # 다른 테스트가 만든 배치 영향 없이 데모 초기 상태로
+    owner = client_for("E1001")
+    pid = _demo_id(owner)
+    pending = [r["planned"] for r in owner.get(f"/api/projects/{pid}/runs").json() if r["status"] == "planned"]
+    props = owner.post(f"/api/projects/{pid}/recommend", json={"batch_size": 4}).json()["proposals"]
+    dup = [p for p in props if p["x"] in pending]
+    assert dup, "데모 데이터에서는 진행 중 런과 같은 조건이 제안되는 상황이 재현되어야 함"
+    for p in dup:
+        assert p["kind"] == "replicate" and "진행 중 런" in p["reason"]
+    for p in props:  # 제안 예측값은 실제 데이터 기준이므로 산포가 0 근처로 붕괴하지 않음
+        assert p["sigma"] > 3.0 and p["mean_hi"] - p["mean_lo"] > 5.0
