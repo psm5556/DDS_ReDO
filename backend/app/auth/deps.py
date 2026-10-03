@@ -12,6 +12,7 @@ from ..models import User
 from .base import AuthProvider
 from .corporate import CorporateAuthProvider
 from .mock import MockAuthProvider
+from .tokens import bearer_of, user_from_bearer
 
 
 @lru_cache
@@ -19,12 +20,19 @@ def get_auth_provider() -> AuthProvider:
     return MockAuthProvider() if get_settings().auth_mode == "mock" else CorporateAuthProvider()
 
 
-def optional_user(request: Request, db: Session = Depends(get_db)) -> User | None:
+def _authenticate(request: Request, db: Session) -> User | None:
+    # 개인 토큰(Bearer)이 있으면 그것만 본다 — 잘못된 토큰이면 세션이 있어도 거부
+    if bearer_of(request):
+        return user_from_bearer(request, db)
     return get_auth_provider().authenticate(request, db)
 
 
+def optional_user(request: Request, db: Session = Depends(get_db)) -> User | None:
+    return _authenticate(request, db)
+
+
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    user = get_auth_provider().authenticate(request, db)
+    user = _authenticate(request, db)
     if user is None:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     now = datetime.now(timezone.utc)

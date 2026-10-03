@@ -149,7 +149,7 @@ IMPORT_SEQ = 0  # 기존 데이터는 '0차'로 묶는다 (앱이 제안한 실�
 
 
 @router.post("/import", response_model=ImportOut)
-def import_existing(project_id: int, body: ImportIn, db: Session = Depends(get_db),
+def import_existing(project_id: int, body: ImportIn, dry_run: bool = False, db: Session = Depends(get_db),
                     user: User = Depends(get_current_user)) -> ImportOut:
     """이미 해 둔 실험 데이터 가져오기. 같은 조건이 여러 행이면 반복 측정으로 본다.
     인자 값은 세팅 정밀도로 반올림하지 않는다 (실제로 세팅한 값이므로 그대로 학습)."""
@@ -206,10 +206,14 @@ def import_existing(project_id: int, body: ImportIn, db: Session = Depends(get_d
         if vals:
             apply_row(db, user, p, cfg, run, ResultRow(run_id=run.id, values=vals), current)
         done += run.status == "done"
+    out = ImportOut(batch=_batch_out(db, b), imported=len(body.rows), done=done,
+                    replicated_conditions=sum(1 for c in count.values() if c >= 2), dry_run=dry_run)
+    if dry_run:  # 저장하지 않고 결과만 미리 본다
+        db.rollback()
+        return out
     audit(db, user.id, "data.import", "project", p.id, rows=len(body.rows), done=done)
     db.commit()
-    return ImportOut(batch=_batch_out(db, b), imported=len(body.rows), done=done,
-                     replicated_conditions=sum(1 for c in count.values() if c >= 2))
+    return out
 
 
 @router.get("/runs", response_model=list[RunOut])
@@ -251,11 +255,62 @@ def _models_for_check(db: Session, p: Project, cfg: ProjectConfig) -> dict:
     return out
 
 
+def normalize_run_code(code: str) -> str:
+    """'1차-3', ' 1차-03 ', 'b1-03'(예전 형식) → '1차-03'"""
+    import re
+    c = re.sub(r"\s+", "", code or "").upper()
+    c = re.sub(r"^B(\d+)-", r"\1차-", c)
+    m = re.match(r"^(\d+)차-(\d+)$", c)
+    return f"{int(m.group(1))}차-{int(m.group(2)):02d}" if m else c
+
+
+def resolve_run_codes(db: Session, project_id: int, rows: list[ResultRow]) -> None:
+    """run_code로 지정한 행에 run_id를 채운다. 없는 런 ID면 404."""
+    codes = {normalize_run_code(r.run_code) for r in rows if r.run_id is None and r.run_code}
+    if not codes:
+        return
+    found = {r.code: r.id for r in db.scalars(select(Run).where(Run.project_id == project_id, Run.code.in_(codes),
+                                                                Run.status != "excluded"))}
+    missing = sorted(codes - set(found))
+    if missing:
+        raise HTTPException(404, f"이 DOE에 없는 런 ID입니다: {', '.join(missing[:10])}")
+    for r in rows:
+        if r.run_id is None and r.run_code:
+            r.run_id = found[normalize_run_code(r.run_code)]
+
+
+def _diff_rows(cfg: ProjectConfig, runs: dict, rows: list[ResultRow], current: dict) -> list[dict]:
+    """저장하면 무엇이 바뀌는지 (미리 보기용). 값은 응답·인자 이름으로."""
+    rn = {r.key: r.name for r in cfg.responses}
+    fn = {f.key: f.name for f in cfg.factors}
+    out = []
+    for row in rows:
+        run = runs[row.run_id]
+        ch: list[dict] = []
+        for k, v in (row.values or {}).items():
+            m = current.get((run.id, k))
+            old = m.value if m else None
+            if old != v:
+                ch.append({"field": rn.get(k, k), "before": old, "after": v})
+        for k, v in (row.actual or {}).items():
+            old = (run.actual or run.planned).get(k)
+            if old != v:
+                ch.append({"field": f"{fn.get(k, k)} (실제 조건)", "before": old, "after": v})
+        if row.deviation_note is not None and row.deviation_note != (run.deviation_note or ""):
+            ch.append({"field": "메모", "before": run.deviation_note or "", "after": row.deviation_note})
+        if row.status is not None and row.status != run.status:
+            ch.append({"field": "상태", "before": run.status, "after": row.status})
+        if ch:
+            out.append({"run": run.code, "changes": ch})
+    return out
+
+
 @router.post("/results")
-def save_results(project_id: int, body: ResultsIn, db: Session = Depends(get_db),
+def save_results(project_id: int, body: ResultsIn, dry_run: bool = False, db: Session = Depends(get_db),
                  user: User = Depends(get_current_user)) -> dict:
     p, _ = require_project(db, user, project_id, "runner")
     cfg = project_config(p)
+    resolve_run_codes(db, p.id, body.rows)
     ids = [r.run_id for r in body.rows]
     runs = {r.id: r for r in db.scalars(select(Run).where(Run.id.in_(ids), Run.project_id == p.id))}
     if len(runs) != len(set(ids)):
@@ -277,6 +332,10 @@ def save_results(project_id: int, body: ResultsIn, db: Session = Depends(get_db)
             if pw:
                 warnings.setdefault(row.run_id, []).extend(pw)
     current = current_measurements(db, ids)
+    if dry_run:  # 저장하지 않고 바뀔 내용·경고만
+        diff = _diff_rows(cfg, runs, body.rows, current)
+        return {"dry_run": True, "would_change": len(diff), "changes": diff,
+                "warnings": {runs[k].code: v for k, v in warnings.items()}}
     changed = 0
     for row in body.rows:
         if apply_row(db, user, p, cfg, runs[row.run_id], row, current):

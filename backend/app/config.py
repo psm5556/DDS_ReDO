@@ -32,6 +32,22 @@ class Settings(BaseSettings):
     tabpfn_model_sha256: str = ""
     tabpfn_n_estimators: int = 8
 
+    # ---- 사내 LLM (AI 도우미 'DDS Conversa' · MCP) ----
+    # 주소와 모델 이름만 넣으면 켜진다. 예) REDO_LLM_BASE_URL=http://ollama.사내:11434  REDO_LLM_MODEL=qwen2.5:14b
+    llm_provider: Literal["ollama", "openai"] = "ollama"   # ollama: /api/chat,  openai: OpenAI 호환 /v1/chat/completions (사내 게이트웨이 등)
+    llm_base_url: str = ""
+    llm_model: str = ""
+    llm_api_key: str = ""            # 게이트웨이가 키를 요구할 때만 (Authorization: Bearer)
+    llm_timeout_sec: float = 120.0
+    llm_temperature: float = 0.1
+    llm_num_ctx: int = 16384         # Ollama 문맥 길이 (도구 설명이 들어가도록 넉넉히)
+    llm_max_steps: int = 6           # 한 번의 요청에서 도구를 부를 수 있는 최대 횟수
+    mcp_enabled: bool = True         # /mcp (개인 토큰으로 접속)
+
+    @property
+    def llm_enabled(self) -> bool:
+        return bool(self.llm_base_url.strip() and self.llm_model.strip())
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -5,6 +5,7 @@ import { defineConfig } from "@playwright/test";
 const PY = process.env.REDO_PYTHON ?? "python";
 const API_PORT = 8011;
 const WEB_PORT = 5181;
+const LLM_PORT = 8013;
 
 export default defineConfig({
   testDir: "e2e",
@@ -21,9 +22,18 @@ export default defineConfig({
   },
   webServer: [
     {
+      // DDS Conversa 시험용 가짜 Ollama (실제 LLM 없이 대화·확인 흐름 검증)
+      command: `"${PY}" -m scripts.mock_ollama --port ${LLM_PORT}`,
+      cwd: "../backend",
+      url: `http://127.0.0.1:${LLM_PORT}/api/tags`,
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
       command: `"${PY}" -m app.seed --reset && "${PY}" -m uvicorn app.main:app --port ${API_PORT}`,
       cwd: "../backend",
-      env: { REDO_DATABASE_URL: "sqlite:///./e2e.db", REDO_ENV: "dev", PYTHONIOENCODING: "utf-8" },
+      env: { REDO_DATABASE_URL: "sqlite:///./e2e.db", REDO_ENV: "dev", PYTHONIOENCODING: "utf-8",
+             REDO_LLM_BASE_URL: `http://127.0.0.1:${LLM_PORT}`, REDO_LLM_MODEL: "mock" },
       url: `http://localhost:${API_PORT}/api/auth/config`,
       reuseExistingServer: false,
       timeout: 120_000,

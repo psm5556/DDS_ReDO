@@ -1,10 +1,11 @@
-import { BookOpen, ChevronDown, ChevronRight, Home, Inbox, LogOut, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Share2, Star, Sun, Users } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Home, Sparkles, Inbox, LogOut, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Share2, Star, Sun, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api, del, get, post } from "../api";
 import { useAuth } from "../auth";
 import { useTheme } from "../theme";
 import { openManual } from "../manual";
+import { openConversa } from "../assistant/Conversa";
 import { ROLE_LABEL } from "../format";
 import { allowedSteps, autoStep, nextAction, notifyProjectsChanged, PROJECTS_CHANGED, STEPS } from "../guide/steps";
 import { useToast } from "../toast";
@@ -179,6 +180,7 @@ export function ProjectSidebar({ layout }: { layout?: SideLayout }) {
         <button className="icon-btn rail-btn" onClick={layout.toggle} aria-label="사이드바 펼치기" title="사이드바 펼치기 (Ctrl+B)"><PanelLeftOpen size={18} /></button>
         <Link className="icon-btn rail-btn" to="/" aria-label="첫 화면" title="첫 화면"><Home size={18} /></Link>
         <Link className="icon-btn rail-btn primary" to="/new" aria-label="새 DOE 만들기" title="새 DOE 만들기"><Plus size={18} /></Link>
+        <button className="icon-btn rail-btn conversa-rail" onClick={openConversa} aria-label="DDS Conversa 열기" title="DDS Conversa (Ctrl+J)"><Sparkles size={18} /></button>
         <span className="grow" />
         <button className="icon-btn rail-btn" onClick={() => openManual()} aria-label="사용 매뉴얼" title="사용 매뉴얼 (새 창)"><BookOpen size={18} /></button>
         <button className="icon-btn rail-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button>
@@ -214,6 +216,8 @@ export function ProjectSidebar({ layout }: { layout?: SideLayout }) {
       </div>
       <div className="side-body">
         <Link className="btn primary side-new" to="/new"><Plus size={15} />새 DOE 만들기</Link>
+        <button className="conversa-open" onClick={openConversa} aria-label="DDS Conversa 열기" title="말로 조작하는 AI 도우미 (Ctrl+J)">
+          <Sparkles size={15} /><span className="grow">DDS Conversa</span><kbd>Ctrl J</kbd></button>
         <div className="side-search">
           <Search size={14} />
           <input type="search" placeholder="DOE 이름·설명 검색" value={q} onChange={(e) => setQ(e.target.value)} aria-label="DOE 검색" />

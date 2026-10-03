@@ -17,7 +17,7 @@ test("사이드바의 '사용 매뉴얼'을 누르면 새 창에 매뉴얼이 �
   await expect(popup).toHaveURL(/\/manual\/index\.html$/);
   await expect(popup.getByRole("heading", { level: 1 })).toContainText("사용 매뉴얼");
   const toc = popup.getByRole("navigation", { name: "목차" });
-  await expect(toc.locator("a[data-id]")).toHaveCount(25);
+  await expect(toc.locator("a[data-id]")).toHaveCount(28);
   // 그림이 실제로 불러와진다
   const img = popup.locator("main figure img").first();
   await img.scrollIntoViewIfNeeded();

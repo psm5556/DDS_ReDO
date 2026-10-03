@@ -227,13 +227,20 @@ class BatchOut(BaseModel):
 
 
 class ResultRow(BaseModel):
-    run_id: int
+    run_id: int | None = Field(default=None, description="런 내부 번호. run_code와 둘 중 하나")
+    run_code: str | None = Field(default=None, description="런 ID (예: '1차-03'). 예전 형식 'B1-03'도 인식")
     actual: dict[str, float] | None = None
     values: dict[str, float | None] | None = None
     status: Literal["planned", "running", "done", "failed", "infeasible"] | None = None
     fail_reason: str | None = None
     deviation_note: str | None = None
     note: str | None = None
+
+    @model_validator(mode="after")
+    def _need_run(self) -> "ResultRow":
+        if self.run_id is None and not (self.run_code or "").strip():
+            raise ValueError("run_id 또는 run_code(예: 1차-03)가 필요합니다.")
+        return self
 
 
 class ResultsIn(BaseModel):
@@ -262,6 +269,7 @@ class ImportOut(BaseModel):
     imported: int
     done: int
     replicated_conditions: int  # 2회 이상 측정한 조건 수 (산포 추정에 쓰임)
+    dry_run: bool = False       # true면 저장하지 않고 결과만 미리 본 것
 
 
 class ManualRunIn(BaseModel):

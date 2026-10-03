@@ -1,8 +1,9 @@
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { Conversa } from "./assistant/Conversa";
 import { RequireAuth } from "./auth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ProjectSidebar } from "./components/ProjectSidebar";
-import { useSideLayout } from "./components/sideLayout";
+import { useConversaLayout, useSideLayout } from "./components/sideLayout";
 import { TopBar } from "./components/TopBar";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
@@ -25,11 +26,14 @@ function RouteBoundary({ children }: { children: React.ReactNode }) {
 /** 왼쪽 DOE 목록(로고·사용자 포함) + 오른쪽 작업 영역. 상단바는 두지 않아 화면 높이를 작업에 쓴다 */
 function SideShell({ children }: { children: React.ReactNode }) {
   const side = useSideLayout();
+  const cv = useConversaLayout();
   return (
     <RequireAuth>
-      <div className={`app-shell ${side.collapsed ? "side-collapsed" : ""}`} style={{ "--side-w": `${side.width}px` } as React.CSSProperties}>
+      <div className={`app-shell ${side.collapsed ? "side-collapsed" : ""} ${cv.collapsed ? "cv-collapsed" : ""}`}
+        style={{ "--side-w": `${side.width}px`, "--cv-w": `${cv.width}px` } as React.CSSProperties}>
         <ProjectSidebar layout={side} />
         <div className="app-main"><RouteBoundary>{children}</RouteBoundary></div>
+        <ErrorBoundary label="DDS Conversa"><Conversa layout={cv} /></ErrorBoundary>
       </div>
     </RequireAuth>
   );

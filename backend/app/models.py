@@ -193,3 +193,27 @@ class AuditLog(Base):
     entity_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ApiToken(Base):
+    """개인 접근 토큰: MCP 클라이언트·사내 시스템이 '이 사용자로서' API를 쓰게 한다.
+    원문은 만들 때 한 번만 보여 주고, DB에는 SHA-256 해시만 저장한다 (비밀번호가 아니며 언제든 폐기 가능)."""
+    __tablename__ = "api_tokens"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    prefix: Mapped[str] = mapped_column(String(16))  # 화면 표시용 앞부분 (예: redo_AbC1…)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AssistantAction(Base):
+    """AI 도우미 확인 카드로 실행한 작업. 같은 확인 토큰을 두 번 쓰지 못하게(중복 실행 방지) 토큰 ID를 남긴다."""
+    __tablename__ = "assistant_actions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    jti: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    tool: Mapped[str] = mapped_column(String(60))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

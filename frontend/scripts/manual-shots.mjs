@@ -388,6 +388,58 @@ await step("22-dark", async () => {
   await page.locator(".side-me").getByRole("button", { name: "밝은 화면으로" }).click();
 });
 
+// ---------- DDS Conversa (가짜 LLM: scripts/mock_ollama.py 를 켜 두고, 백엔드에 REDO_LLM_BASE_URL·REDO_LLM_MODEL 지정) ----------
+await step("23-conversa", async () => {
+  await page.goto(`${BASE}/projects/${NEW_ID}/step/1`);
+  await page.locator("#cell-0-0").waitFor();
+  await page.locator(".sidebar").getByRole("button", { name: "DDS Conversa 열기" }).click();
+  const panel = page.getByRole("complementary", { name: "DDS Conversa" });
+  const box = panel.getByRole("textbox", { name: "DDS Conversa에게 요청" });
+  await box.fill("이 DOE 상태 알려줘");
+  await box.press("Enter");
+  await panel.locator(".cv-msg.assistant").first().waitFor();
+  await box.fill("1차-05 두께 10.2");
+  await box.press("Enter");
+  await panel.getByRole("group", { name: /확인:/ }).waitFor();
+  await wait(400);
+  await mark([
+    [page.locator(".sidebar").getByRole("button", { name: "DDS Conversa 열기" }), 1],
+    [panel.locator(".cv-msg.assistant").first(), 2],
+    [panel.getByRole("group", { name: /확인:/ }), 3],
+    [panel.locator(".cv-input"), 4],
+    [panel.getByRole("button", { name: "MCP 연결" }), 5],
+    [panel.getByRole("button", { name: "DDS Conversa 접기" }), 6],
+    [page.getByRole("separator", { name: "DDS Conversa 너비 조절" }), 7, 2],
+  ]);
+  await shot("23-conversa", { top: false });
+});
+
+await step("24-conversa-danger", async () => {
+  const panel = page.getByRole("complementary", { name: "DDS Conversa" });
+  const box = panel.getByRole("textbox", { name: "DDS Conversa에게 요청" });
+  await panel.getByRole("group", { name: /확인:/ }).last().getByRole("button", { name: "취소" }).click();
+  await box.fill("1차-06 지워줘");
+  await box.press("Enter");
+  const card = panel.getByRole("group", { name: /확인:/ }).last();
+  await card.waitFor();
+  await card.getByRole("button", { name: "실행" }).click();
+  await card.getByText("정말 실행할까요?").waitFor();
+  await mark([[card, 1]]);
+  await shotEl("24-conversa-danger", panel);
+  await card.getByRole("button", { name: "아니오" }).click();
+});
+
+await step("25-mcp", async () => {
+  await page.getByRole("complementary", { name: "DDS Conversa" }).getByRole("button", { name: "MCP 연결" }).click();
+  const dlg = page.getByRole("dialog", { name: /MCP 연결/ });
+  await dlg.waitFor();
+  await mark([[dlg.getByRole("textbox", { name: "MCP 서버 주소" }), 1], [dlg.getByRole("button", { name: "토큰 만들기" }), 2], [dlg.locator(".code-block"), 3]]);
+  await shot("25-mcp", { top: false });
+  await page.keyboard.press("Escape");
+  await page.getByRole("complementary", { name: "DDS Conversa" }).getByRole("button", { name: "대화 지우기" }).click();
+  await page.keyboard.press("Escape");
+});
+
 // ---------- 8. 공유받은 예측 페이지 (박지호) ----------
 await step("19-shared", async () => {
   const c2 = await browser.newContext({ viewport: { width: W, height: HGT }, locale: "ko-KR" });

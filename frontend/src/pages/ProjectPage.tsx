@@ -5,7 +5,7 @@ import { api, del, get, patch } from "../api";
 import { MembersShareModal } from "../components/ProjectMenu";
 import { openManual } from "../manual";
 import GuideView from "../guide/GuideView";
-import { allowedSteps, notifyProjectsChanged, resolveStep, STEPS, type Step } from "../guide/steps";
+import { allowedSteps, DATA_CHANGED, notifyProjectsChanged, resolveStep, STEPS, type Step } from "../guide/steps";
 import { PROJECT_STATUS, ROLE_LABEL, when } from "../format";
 import { can, ProjectContext, useProject } from "../project";
 import { useToast } from "../toast";
@@ -147,6 +147,11 @@ export default function ProjectPage() {
     } catch (e) { setErr((e as Error).message); }
   }, [pid]);
   useEffect(() => { setProject(null); void reload(); }, [reload]);
+  useEffect(() => { // AI 도우미가 데이터를 바꾸면 다시 불러온다
+    const h = () => void reload();
+    window.addEventListener(DATA_CHANGED, h);
+    return () => window.removeEventListener(DATA_CHANGED, h);
+  }, [reload]);
 
   if (err) return <div className="page"><div className="notice err">{err}</div></div>;
   if (!project || String(project.id) !== pid) return <div className="page"><div className="busy"><span className="spinner" /> 불러오는 중</div></div>;

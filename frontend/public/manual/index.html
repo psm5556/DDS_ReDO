@@ -607,7 +607,7 @@ nav.toc .none { color: var(--ink-4); font-size: 12.5px; padding: 4px 0; }
 <p>실험이 적을 때는 &quot;아직 실험이 적어 예측이 정확하지 않을 수 있습니다&quot;가 표시됩니다. 이때의 추천은 <strong>후보</strong>로만 보고, 다음 실험을 하면서 좁혀 가세요.</p>
 </blockquote>
 <h3 id="6-1-자세히-보기"><a class="anchor" href="#6-1-자세히-보기" aria-hidden="true">#</a>6-1. 자세히 보기</h3>
-<p><figure><img src="img/13-details.png" alt="자세히 보기" width="1096" height="938" loading="lazy" data-zoom><figcaption>자세히 보기</figcaption></figure></p>
+<p><figure><img src="img/13-details.png" alt="자세히 보기" width="1048" height="938" loading="lazy" data-zoom><figcaption>자세히 보기</figcaption></figure></p>
 <ol>
 <li><strong>응답별 예측</strong><ul>
 <li><strong>예상 평균 (범위)</strong>: 평균이 있을 법한 범위</li>
@@ -619,7 +619,7 @@ nav.toc .none { color: var(--ink-4); font-size: 12.5px; padding: 4px 0; }
 <li><strong>모델 신뢰도</strong>: 예측이 실제 결과를 얼마나 잘 맞히는지 스스로 점검한 결과입니다. <strong>95% 구간 포함률</strong>이 크게 낮으면 ⚠와 함께 안내가 나옵니다(실험을 더 하거나 범위를 확인하세요).</li>
 </ol>
 <h3 id="6-2-그래프"><a class="anchor" href="#6-2-그래프" aria-hidden="true">#</a>6-2. 그래프</h3>
-<p><figure><img src="img/14-graphs.png" alt="그래프" width="1046" height="1193" loading="lazy" data-zoom><figcaption>그래프</figcaption></figure></p>
+<p><figure><img src="img/14-graphs.png" alt="그래프" width="998" height="1193" loading="lazy" data-zoom><figcaption>그래프</figcaption></figure></p>
 <ol>
 <li><strong>평균 지도</strong>(청록)와 <strong>산포 지도</strong>(보라)를 나란히 보여 줍니다. 가로·세로축 인자를 고르고, 나머지 인자는 슬라이더로 정합니다. 점은 실제 실험한 조건이고, 초록 점선은 규격 경계입니다.<ul>
 <li>평균이 좋아도 <strong>산포가 큰 영역</strong>(보라가 진한 곳)은 양산에서 결과가 흔들립니다. 두 지도를 함께 보세요.</li>
@@ -629,7 +629,7 @@ nav.toc .none { color: var(--ink-4); font-size: 12.5px; padding: 4px 0; }
 <li><strong>인자별 영향</strong>: 추천 레시피에서 인자 하나만 바꿨을 때 평균(청록)과 산포(보라)가 어떻게 변하는지 보여 줍니다.</li>
 </ol>
 <h3 id="6-3-조건-시뮬레이션"><a class="anchor" href="#6-3-조건-시뮬레이션" aria-hidden="true">#</a>6-3. 조건 시뮬레이션</h3>
-<p><figure><img src="img/15-sim.png" alt="조건 시뮬레이션" width="1046" height="271" loading="lazy" data-zoom><figcaption>조건 시뮬레이션</figcaption></figure></p>
+<p><figure><img src="img/15-sim.png" alt="조건 시뮬레이션" width="998" height="271" loading="lazy" data-zoom><figcaption>조건 시뮬레이션</figcaption></figure></p>
 <ol>
 <li>슬라이더나 숫자로 조건을 바꿔 보세요.</li>
 <li>모든 응답의 예상값, 규격 확률, 목표 달성 점수가 바로 계산됩니다. 실험한 범위 밖이면 &quot;외삽&quot; 경고가 붙습니다.</li>
@@ -725,7 +725,78 @@ nav.toc .none { color: var(--ink-4); font-size: 12.5px; padding: 4px 0; }
 <p>사이드바 너비·접힘·화면 모드는 <strong>이 브라우저에만</strong> 저장됩니다. 다른 PC에서는 다시 정해야 합니다.</p>
 </blockquote>
 <hr>
-<h2 id="10-자주-묻는-질문--용어"><a class="anchor" href="#10-자주-묻는-질문--용어" aria-hidden="true">#</a>10. 자주 묻는 질문 · 용어</h2>
+<h2 id="10-dds-conversa-말로-조작하기"><a class="anchor" href="#10-dds-conversa-말로-조작하기" aria-hidden="true">#</a>10. DDS Conversa: 말로 조작하기</h2>
+<p><strong>DDS Conversa</strong>는 사내 LLM으로 동작하는 AI 도우미입니다. 화면을 찾아 누르는 대신 말로 요청하면 앱이 대신 처리합니다.
+대화 내용과 실험 데이터는 <strong>사내 LLM으로만</strong> 보내고 외부로 나가지 않습니다. 내 권한 안의 일만 할 수 있습니다.</p>
+<p><figure><img src="img/23-conversa.png" alt="DDS Conversa" width="1440" height="900" loading="lazy" data-zoom><figcaption>DDS Conversa</figcaption></figure></p>
+<ol>
+<li>왼쪽 사이드바의 <strong>DDS Conversa</strong>, 화면 오른쪽 끝의 ✦ 아이콘 막대, 또는 <strong>Ctrl+J</strong>로 <strong>오른쪽 사이드바</strong>가 펼쳐집니다. 본문을 가리지 않고 옆에 붙어 있어, 실험 표를 보면서 요청할 수 있습니다.</li>
+<li>조회 요청에는 바로 답합니다. 예: &quot;이 DOE 상태 알려 줘&quot;, &quot;추천 레시피를 쉽게 설명해 줘&quot;, &quot;남은 실험 보여 줘&quot;</li>
+<li>데이터를 바꾸는 요청에는 <strong>확인 카드</strong>가 뜹니다. 무엇이 어떻게 바뀌는지 보고 <strong>실행</strong>을 눌러야 저장됩니다(<strong>취소</strong>를 누르면 아무것도 바뀌지 않음). 실행하면 열려 있는 화면도 바로 바뀝니다.</li>
+<li>요청을 입력하고 <strong>Enter</strong>를 누르세요(줄바꿈은 Shift+Enter). 지금 보고 있는 DOE는 따로 말하지 않아도 됩니다.</li>
+<li><strong>MCP 연결</strong>: 사내 에이전트·IDE 같은 다른 도구에서 DDS ReDO를 쓰도록 연결합니다(아래).</li>
+<li><strong>접기</strong>: 아이콘 막대로 접습니다(Ctrl+J로 다시 펼침).</li>
+<li><strong>너비 조절</strong>: 왼쪽 가장자리를 끌어 넓히거나 좁힙니다(320~720px, 두 번 누르면 기본 너비). 너비와 접힘 상태는 이 브라우저에 기억됩니다.</li>
+</ol>
+<p><strong>이렇게 말해 보세요</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>하고 싶은 일</th>
+<th>예시</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>상태·목록 보기</td>
+<td>&quot;내 DOE 목록 보여 줘&quot;, &quot;지금 할 일이 뭐야?&quot;, &quot;CMP 슬러리 진행 상황 알려 줘&quot;</td>
+</tr>
+<tr>
+<td>결과 입력</td>
+<td>&quot;1차-03 제거율 412, 디싱 18 입력해 줘&quot;, &quot;1차-07은 장비 고장으로 실패 처리해 줘&quot;</td>
+</tr>
+<tr>
+<td>추천·예측</td>
+<td>&quot;추천 레시피 설명해 줘&quot;, &quot;연마제 9, 산화제 2, pH 3이면 어떻게 돼?&quot;</td>
+</tr>
+<tr>
+<td>다음 실험</td>
+<td>&quot;다음 실험 4건 제안해 줘&quot;, &quot;그대로 다음 실험으로 확정해 줘&quot;</td>
+</tr>
+<tr>
+<td>만들기·가져오기</td>
+<td>&quot;전류 1<del>5 A, 시간 10</del>60분으로 두께(목표 10, 9.5~10.5)를 맞추는 DOE 만들어 줘&quot;</td>
+</tr>
+<tr>
+<td>사용법</td>
+<td>&quot;결과를 엑셀에서 한꺼번에 붙여넣는 방법은?&quot;, &quot;산포가 뭐야?&quot;</td>
+</tr>
+<tr>
+<td>관리 (두 번 확인)</td>
+<td>&quot;이도윤을 실험자로 추가해 줘&quot;, &quot;증착공정개발팀에 예측 공유해 줘&quot;, &quot;1차-06 지워 줘&quot;, &quot;이 DOE 삭제해 줘&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="되돌리기-어려운-작업은-한-번-더-확인합니다"><a class="anchor" href="#되돌리기-어려운-작업은-한-번-더-확인합니다" aria-hidden="true">#</a>되돌리기 어려운 작업은 한 번 더 확인합니다</h3>
+<p><figure><img src="img/24-conversa-danger.png" alt="위험 작업 재확인" width="400" height="900" loading="lazy" data-zoom><figcaption>위험 작업 재확인</figcaption></figure></p>
+<ol>
+<li>삭제, 공유, 멤버 추가·변경·내보내기, 소유권 넘기기는 빨간 카드로 표시됩니다. <strong>실행</strong>을 누르면 &quot;<strong>정말 실행할까요? 되돌리기 어렵습니다.</strong>&quot;가 한 번 더 나오고, <strong>네, 실행합니다</strong>를 눌러야 실행됩니다.</li>
+</ol>
+<ul>
+<li>확인 카드는 10분 동안만 유효하고, 한 번만 실행됩니다.</li>
+<li>AI 도우미로 바꾼 내용은 변경 이력에 &quot;AI 도우미를 통해&quot; 한 것으로 남습니다.</li>
+<li>답이 이상하면 화면에서 직접 확인하세요. AI 도우미는 도구로 확인한 값만 말하도록 되어 있지만, 실수할 수 있습니다.</li>
+</ul>
+<h3 id="mcp-연결-사내-에이전트ide에서-쓰기"><a class="anchor" href="#mcp-연결-사내-에이전트ide에서-쓰기" aria-hidden="true">#</a>MCP 연결 (사내 에이전트·IDE에서 쓰기)</h3>
+<p><figure><img src="img/25-mcp.png" alt="MCP 연결" width="1440" height="900" loading="lazy" data-zoom><figcaption>MCP 연결</figcaption></figure></p>
+<ol>
+<li><strong>MCP 서버 주소</strong>: MCP를 지원하는 사내 도구에 등록할 주소입니다.</li>
+<li><strong>토큰 만들기</strong>: 그 도구가 <strong>내 권한으로</strong> 접속할 개인 토큰을 만듭니다. 토큰은 <strong>만들 때 한 번만</strong> 보여 주니 안전한 곳에 보관하세요. 남과 나누지 말고, 필요 없으면 <strong>폐기</strong>하세요(즉시 접속 불가).</li>
+<li><strong>설정 예시</strong>: MCP 클라이언트 설정 파일에 붙여넣을 내용입니다(토큰을 만들면 자동으로 채워짐).</li>
+</ol>
+<blockquote>
+<p>사내 LLM이 아직 등록되지 않았으면 대화창에 안내가 나옵니다. 관리자가 서버 설정에 LLM 주소와 모델 이름을 넣으면 바로 쓸 수 있습니다(README 참고). MCP 연결은 LLM 등록과 상관없이 쓸 수 있습니다.</p>
+</blockquote>
+<hr>
+<h2 id="11-자주-묻는-질문--용어"><a class="anchor" href="#11-자주-묻는-질문--용어" aria-hidden="true">#</a>11. 자주 묻는 질문 · 용어</h2>
 <p><strong>Q. 엑셀 파일을 올릴 수는 없나요?</strong>
 사내 보안 프로그램 때문에 업로드한 엑셀·CSV 파일은 읽을 수 없습니다. 엑셀에서 <strong>복사 → 앱에서 Ctrl+V</strong> 하세요. 앱에서 엑셀로 가져갈 때는 표 복사(Ctrl+C) 또는 <strong>엑셀 다운로드</strong> 버튼을 쓰면 됩니다.</p>
 <p><strong>Q. 앱이 제안한 값과 다르게 세팅했어요.</strong>
@@ -789,7 +860,7 @@ nav.toc .none { color: var(--ink-4); font-size: 12.5px; padding: 4px 0; }
 </tr>
 </tbody></table></div>
 <hr>
-<h2 id="11-단축키-모음"><a class="anchor" href="#11-단축키-모음" aria-hidden="true">#</a>11. 단축키 모음</h2>
+<h2 id="12-단축키-모음"><a class="anchor" href="#12-단축키-모음" aria-hidden="true">#</a>12. 단축키 모음</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -820,6 +891,10 @@ nav.toc .none { color: var(--ink-4); font-size: 12.5px; padding: 4px 0; }
 <tr>
 <td>Ctrl+B</td>
 <td>사이드바 접기 / 펼치기</td>
+</tr>
+<tr>
+<td>Ctrl+J</td>
+<td>DDS Conversa(오른쪽 사이드바) 접기 / 펼치기</td>
 </tr>
 </tbody></table></div>
 <hr>
@@ -852,8 +927,11 @@ nav.toc .none { color: var(--ink-4); font-size: 12.5px; padding: 4px 0; }
 <a href="#doe-메뉴-즐겨찾기--복제--삭제" class="l3" data-id="doe-메뉴-즐겨찾기--복제--삭제">DOE 메뉴 (즐겨찾기 · 복제 · 삭제)</a>
 <a href="#9-화면-꾸미기-사이드바다크-모드" class="l2" data-id="9-화면-꾸미기-사이드바다크-모드">9. 화면 꾸미기: 사이드바·다크 모드</a>
 <a href="#다크-모드" class="l3" data-id="다크-모드">다크 모드</a>
-<a href="#10-자주-묻는-질문--용어" class="l2" data-id="10-자주-묻는-질문--용어">10. 자주 묻는 질문 · 용어</a>
-<a href="#11-단축키-모음" class="l2" data-id="11-단축키-모음">11. 단축키 모음</a>
+<a href="#10-dds-conversa-말로-조작하기" class="l2" data-id="10-dds-conversa-말로-조작하기">10. DDS Conversa: 말로 조작하기</a>
+<a href="#되돌리기-어려운-작업은-한-번-더-확인합니다" class="l3" data-id="되돌리기-어려운-작업은-한-번-더-확인합니다">되돌리기 어려운 작업은 한 번 더 확인합니다</a>
+<a href="#mcp-연결-사내-에이전트ide에서-쓰기" class="l3" data-id="mcp-연결-사내-에이전트ide에서-쓰기">MCP 연결 (사내 에이전트·IDE에서 쓰기)</a>
+<a href="#11-자주-묻는-질문--용어" class="l2" data-id="11-자주-묻는-질문--용어">11. 자주 묻는 질문 · 용어</a>
+<a href="#12-단축키-모음" class="l2" data-id="12-단축키-모음">12. 단축키 모음</a>
     <div class="none" hidden>찾는 항목이 없습니다</div>
   </nav>
 </div>

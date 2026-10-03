@@ -31,6 +31,40 @@
 | 화면 | 미니멀 디자인, 다크 모드, 사이드바 너비 조절·접기(Ctrl+B), 주요 작업은 클릭 5번 이내 |
 | 보안 | 서버 측 권한 검사(IDOR 차단), 사내 인증 어댑터(Mock은 개발 전용), CSRF 헤더, 외부 CDN·텔레메트리 없음(폰트 포함 모두 번들) |
 
+## AI 도우미 DDS Conversa · MCP (사내 LLM)
+
+사내 LLM(Ollama)으로 앱을 **말로 조작**합니다. "1차-03 제거율 412 입력해 줘", "추천 레시피 설명해 줘", "증착공정개발팀에 공유해 줘" 같은 요청을 처리합니다.
+데이터는 사내 LLM으로만 보내고, 모든 작업은 **로그인한 사용자의 권한** 안에서만 동작합니다.
+
+**켜는 방법 — LLM 정보 두 줄만 등록**
+```powershell
+# backend/.env (예시: backend/.env.example)
+REDO_LLM_BASE_URL=http://ollama.사내도메인:11434   # Ollama 주소
+REDO_LLM_MODEL=qwen2.5:14b                         # 도구 호출(tools)을 지원하는 모델
+```
+서버를 다시 시작하면 사이드바의 **DDS Conversa**(Ctrl+J)가 켜집니다. 연결 상태는 `GET /api/assistant/status`에서 확인합니다.
+OpenAI 호환 게이트웨이를 쓰면 `REDO_LLM_PROVIDER=openai`(+ 필요하면 `REDO_LLM_API_KEY`)로 바꿉니다.
+
+**안전장치**
+- 업무 단위 도구 23개(`backend/app/assistant/tools.py`)만 엽니다.
+  - 읽기 9개: DOE·실험 조회, 추천, 예측, 다음 실험 제안, 사용법 찾기, 화면 이동, 멤버·공유 보기
+  - 쓰기 7개: DOE 만들기, 첫 실험, 결과 입력, 기존 데이터, 다음 실험 확정, 실패 표시, DOE 되살리기
+  - 위험 7개: 삭제, 런 삭제, 공유, 공유 철회, 멤버 추가·변경, 멤버 내보내기, 소유권 이전
+- 쓰기는 **확인 카드 → [실행]**, 위험 작업은 **"정말 실행할까요?" 재확인**까지 거쳐야 실행됩니다(서버가 강제).
+- 확인 카드는 서명된 토큰입니다. 10분 동안만 유효하고, 본인만, 한 번만 실행할 수 있습니다. LLM은 이 단계를 건너뛸 수 없습니다.
+- 감사 로그에 `via=assistant`(화면 대화), `via=mcp`(MCP), `via=api`(개인 토큰)로 남습니다.
+
+**MCP 서버** — 사내 MCP 클라이언트(에이전트·IDE)에서 같은 도구를 씁니다.
+- 주소: `http(s)://<앱 주소>/mcp` (Streamable HTTP, JSON-RPC)
+- 인증: 개인 토큰 `Authorization: Bearer redo_…`. DDS Conversa 창의 🔗 **MCP 연결**에서 발급·폐기하며, 설정 예시를 복사할 수 있습니다.
+- 쓰기 도구는 `confirm=true`, 위험 도구는 `confirm_again=true`까지 줘야 실행됩니다. 도구 annotations(`readOnlyHint`/`destructiveHint`)로 MCP 호스트가 승인 화면을 띄웁니다.
+- LLM 등록과 상관없이 쓸 수 있습니다(`REDO_MCP_ENABLED=false`로 끔).
+
+**API 설명서**: 모든 API에 한국어 요약·설명과 고정 operationId(함수 이름)가 붙어 있습니다 → `/docs`, `/openapi.json`.
+결과 저장은 런 ID(`run_code: "1차-03"`)로 지정할 수 있고, `?dry_run=true`로 저장 전 미리 보기를 할 수 있습니다.
+
+**LLM 없이 시험하기**: `python -m scripts.mock_ollama --port 8013`(정해진 답을 하는 가짜 Ollama) + `REDO_LLM_BASE_URL=http://127.0.0.1:8013 REDO_LLM_MODEL=mock`. E2E 테스트도 이것을 씁니다.
+
 ## 구조
 ```
 backend/    FastAPI + SQLAlchemy(SQLite/PostgreSQL) + scikit-learn(GP), 선택적으로 TabPFN
@@ -80,13 +114,19 @@ cd frontend; npm run manual:shots                      # frontend/public/manual/
 cd frontend; npm run manual:html                       # docs/USER_MANUAL.md → public/manual/index.html (npm run build 때 자동)
 ```
 
-## 주요 환경변수 (`backend/.env`, 접두사 `REDO_`)
+## 주요 환경변수 (`backend/.env`, 접두사 `REDO_`, 예시: [`backend/.env.example`](backend/.env.example))
 | 변수 | 기본값 | 설명 |
 |---|---|---|
 | `REDO_ENV` | dev | dev / test / prod (prod에서 Mock 인증이면 기동 거부) |
 | `REDO_DATABASE_URL` | sqlite:///./redo.db | PostgreSQL: `postgresql+psycopg://...` |
 | `REDO_SECRET_KEY` | dev-only-change-me | 세션 서명 키 (운영 필수) |
 | `REDO_AUTH_MODE` | mock | mock / corporate (사내 로그인 연계, 사양 수령 후 구현) |
+| `REDO_LLM_BASE_URL` | | 사내 LLM(Ollama) 주소. 이것과 모델을 넣으면 DDS Conversa가 켜짐 |
+| `REDO_LLM_MODEL` | | 모델 이름 (도구 호출 지원 모델) |
+| `REDO_LLM_PROVIDER` | ollama | ollama / openai(OpenAI 호환 게이트웨이) |
+| `REDO_LLM_API_KEY` | | 게이트웨이 키 (필요할 때만) |
+| `REDO_LLM_NUM_CTX` | 16384 | Ollama 문맥 길이 |
+| `REDO_MCP_ENABLED` | true | MCP 서버(/mcp) |
 | `REDO_TABPFN_ENABLED` | false | TabPFN 기능 플래그 |
 | `REDO_TABPFN_MODEL_PATH` | | 서버에 미리 받아 둔 가중치 파일 경로 |
 | `REDO_TABPFN_MODEL_SHA256` | | 가중치 해시 (시작 시 검증) |

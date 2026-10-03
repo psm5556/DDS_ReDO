@@ -47,6 +47,10 @@ export function nextAction(p: ProjectSummary): { step: Step; text: string; mine:
     : { step, text: "추천 레시피 확인", mine: false };
 }
 
+/** 화면 밖(AI 도우미 등)에서 DOE 데이터가 바뀌었음을 열려 있는 화면에 알린다 → DOE 화면·실험 표가 다시 불러온다 */
+export const DATA_CHANGED = "redo:data-changed";
+export const notifyDataChanged = () => window.dispatchEvent(new Event(DATA_CHANGED));
+
 /** 프로젝트 상태가 바뀌었음을 사이드바 등에 알린다 */
 export const PROJECTS_CHANGED = "redo:projects-changed";
 export const notifyProjectsChanged = () => window.dispatchEvent(new Event(PROJECTS_CHANGED));

@@ -5,6 +5,7 @@ import { ImportData } from "../components/ImportData";
 import { Confirm, Modal } from "../components/Modal";
 import { FAIL_REASONS, RunCard, type RowPatch } from "../components/RunCard";
 import { fmtFactor, STATUS_LABEL, when } from "../format";
+import { DATA_CHANGED } from "../guide/steps";
 import { useGridSelect } from "../gridSelect";
 import { copyText, matchHeader, parseClipboard, toTsv, type PasteTarget } from "../paste";
 import { can, useProject } from "../project";
@@ -65,6 +66,11 @@ export default function ResultsSection() {
     setRuns(rr); setBatches(bs); setLoadSeq((n) => n + 1);
   }, [project.id]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { // AI 도우미가 결과를 넣으면 표를 다시 불러온다
+    const h = () => void load();
+    window.addEventListener(DATA_CHANGED, h);
+    return () => window.removeEventListener(DATA_CHANGED, h);
+  }, [load]);
 
   // 임시 저장(오프라인 대비)
   useEffect(() => {

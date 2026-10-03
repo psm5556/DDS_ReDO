@@ -6,10 +6,10 @@ claude.ai 대화에서 만든 첫 구현을 Claude Code로 이어서 개발하�
 ## 현재 상태 요약
 | 영역 | 상태 |
 |---|---|
-| 백엔드 (FastAPI) | 구현 완료 + 다목적 최적화, `pytest` 40개 통과 |
+| 백엔드 (FastAPI) | 구현 완료 + 다목적 최적화, `pytest` 59개 통과 |
 | 모델링 (GP, 획득, 검증) | 구현 완료, 합성 데이터로 검증 |
 | TabPFN 어댑터 | **코드만 작성, 실제 실행 미검증** (가중치 없는 환경에서 작성) |
-| 프론트엔드 (React) | 전 화면 작성·브라우저 점검 완료, `npm run build` 통과, E2E 49개 통과 |
+| 프론트엔드 (React) | 전 화면 작성·브라우저 점검 완료, `npm run build` 통과, E2E 53개 통과 |
 | 사내 로그인 연계 | 구조만 준비 (`backend/app/auth/corporate.py`), 사양 대기 |
 
 ## 남은 작업 (우선순위 순)
@@ -131,6 +131,29 @@ claude.ai 대화에서 만든 첫 구현을 Claude Code로 이어서 개발하�
    - 앱: 사이드바 아래 📖(사용 매뉴얼, 새 창), DOE 머리글 '도움말' = 지금 탭에 맞는 절로 (src/manual.ts openManual)
    - 보안: 운영 모드 SPA 정적 파일 제공에서 dist 밖 경로(%2e%2e 등)로 파일을 읽을 수 있던 문제 수정 (main.py, 회귀 테스트 추가)
    - 테스트: pytest 40개, E2E 49개 (manual.spec.ts)
+2-10. ~~사내 LLM 연결: 1단계(API 정비) + 2단계(DDS Conversa · MCP)~~ (2026-10-03)
+   - 1단계
+     - API 65개 모두 한국어 요약·설명·분류(app/api_docs.py), operationId = 함수 이름
+     - 결과 저장 run_code(런 ID, 예전 B1-01도 인식), save_results·import ?dry_run=true(저장 없이 미리 보기)
+     - 감사 로그 via(assistant/mcp/api), 개인 토큰(api_tokens, SHA-256만 저장, Bearer 인증·CSRF 제외·비활성 사용자 차단)
+   - 2단계
+     - app/assistant/ 구성:
+       - tools.py: 업무 도구 23개 (읽기 9, 쓰기 7, 위험 7)
+       - llm.py: Ollama /api/chat · OpenAI 호환
+       - agent.py: 대화 루프, 확인 카드 = itsdangerous 서명 토큰(10분·본인·1회, assistant_actions.jti)
+       - mcp.py: JSON-RPC (initialize·tools/list·tools/call·ping·배치)
+       - manual_search.py: 매뉴얼 검색
+     - 라우터 routers/assistant.py:
+       - /api/assistant/status · chat · confirm(danger_ack)
+       - /api/me/tokens
+       - /mcp
+     - 화면: src/assistant/Conversa.tsx('DDS Conversa' — 오른쪽 사이드바: 접기 Ctrl+J·아이콘 막대, 왼쪽 가장자리 드래그로 너비 320~720, components/sideLayout.ts의 usePanelLayout을 왼쪽 사이드바와 같이 씀), 확인 카드·위험 재확인, 실행 후 DATA_CHANGED로 화면 새로고침. McpConnect.tsx(토큰 발급·폐기, 설정 예시)
+     - 사용자 요청으로 삭제·공유·멤버·소유권 이전도 도구에 포함 — 위험 작업은 화면 '정말 실행할까요?'(danger_ack) / MCP confirm_again 필수
+     - 켜기: REDO_LLM_BASE_URL + REDO_LLM_MODEL (backend/.env.example). 시험: scripts/mock_ollama.py (E2E가 사용)
+   - 남은 일
+     - 실제 사내 Ollama 모델로 도구 선택 품질 점검 (도구 23개는 작은 모델에 많을 수 있음 → 필요하면 화면별로 도구를 나눠 주기)
+     - 응답 스트리밍
+   - 테스트: pytest 59개(test_assistant.py 19), E2E 53개(conversa.spec.ts 4)
 3. 주요 화면 사용성 점검 (CLAUDE.md 7.6절): 실제 엔지니어 3~5명 대상 테스트 계획 작성.
 4. 사내 개발 전환 시 작업 (아래 "프로토타입 단순화" 해소).
 
