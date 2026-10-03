@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DDS ReDO UI 키트 미리보기</title>
+<!-- 키트 = 토큰 + 컴포넌트 두 파일. 한글 글꼴은 앱에서 Pretendard를 번들(npm pretendard)하고, 여기서는 설치된 글꼴로 대체 -->
+<link rel="stylesheet" href="../../frontend/src/design/tokens.css">
+<link rel="stylesheet" href="../../frontend/src/design/kit.css">
+<style>
+  /* 미리보기 전용 배치 */
+  .demo-grid { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 28px; }
+  .section-title { font-size: 12px; font-weight: 600; color: var(--ink-4); letter-spacing: .04em; margin: 30px 0 10px; }
+  .static-modal { position: static; display: block; padding: 0; background: none; backdrop-filter: none; }
+  .resp { display: grid; grid-template-columns: 90px 130px 1fr 110px; gap: 12px; align-items: center; margin-top: 12px; }
+  .resp .pct { text-align: right; font-weight: 650; }
+  .resp .pct small { display: block; font-weight: 400; color: var(--ink-4); font-size: 11.5px; }
+</style>
+<script>
+  // 테마: 처음엔 OS 설정, 바꾸면 기억 (앱의 theme.ts와 같은 규칙)
+  try { document.documentElement.dataset.theme = localStorage.getItem("redo.theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch (e) {}
+</script>
+</head>
+<body>
+<div class="app-shell" id="shell" style="--side-w: 264px">
+  <aside class="sidebar" id="side">
+    <div class="side-brand-row">
+      <a class="side-brand" href="#"><span class="logo">Re</span>DDS ReDO</a>
+      <button class="icon-btn" title="사이드바 접기 (Ctrl+B)" onclick="toggleSide()">⟨</button>
+    </div>
+    <div class="side-body">
+      <a class="btn primary" href="#">＋ 새 DOE 만들기</a>
+      <input type="search" placeholder="DOE 이름·설명 검색">
+      <div class="seg" style="width:100%"><button class="on" style="flex:1">전체</button><button style="flex:1">즐겨찾기</button><button style="flex:1">공유받음</button></div>
+      <div class="side-group">
+        <h4>내가 만든 DOE 2</h4>
+        <div class="side-row active"><i class="side-dot todo"></i>CMP 슬러리 배합 최적화</div>
+        <div class="side-sub mine">추천 레시피 확인 → 다음 실험 확정</div>
+        <div class="side-row"><i class="side-dot todo"></i>Poly-Si 식각 레시피</div>
+        <div class="side-sub mine">결과 입력 · 4건 남음</div>
+        <div class="side-row"><i class="side-dot"></i>Cu 도금 조건</div>
+        <div class="side-sub">보관됨</div>
+      </div>
+    </div>
+    <div class="side-me"><span class="avatar">김</span><span class="grow small"><b>김서연</b><br><span class="muted">식각공정개발팀</span></span>
+      <button class="icon-btn" title="밝은/어두운 화면" onclick="toggleTheme()">◐</button></div>
+    <div class="side-resizer" id="resizer" title="끌어서 너비 조절 · 두 번 누르면 기본 너비"></div>
+  </aside>
+
+  <main class="page">
+    <div class="crumb"><a href="#">내 DOE</a> / CMP 슬러리 배합 최적화</div>
+    <div class="page-head">
+      <div class="grow"><h1>CMP 슬러리 배합 최적화</h1><p class="page-sub">1차 · 실험 20/20회 완료 · 소유자 김서연 · 멤버 1명</p></div>
+      <button class="icon-btn" title="즐겨찾기">☆</button>
+      <button>멤버·공유</button>
+    </div>
+    <nav class="tabs">
+      <button class="tab">설정</button>
+      <button class="tab done"><span class="num">✓</span>실험 데이터 입력</button>
+      <button class="tab on"><span class="num">2</span>능동학습 결과</button>
+      <button class="tab"><span class="num">3</span>예시 <span class="badge">결과 4건 남음</span></button>
+    </nav>
+
+    <section class="panel demo-grid">
+      <div>
+        <div class="eyebrow">✦ 추천 레시피</div>
+        <div class="big-values">
+          <div><span>연마제 농도</span><b>9.0</b><small>wt%</small></div>
+          <div><span>산화제</span><b>2.0</b><small>wt%</small></div>
+          <div><span>pH</span><b>2.5</b></div>
+        </div>
+        <div class="resp"><b>제거율</b><span>약 <b>411</b> <small class="muted">nm/min</small></span><span class="bar"><i style="width:72%"></i></span><span class="pct">72%<small>400 이상일 확률</small></span></div>
+        <div class="resp"><b>디싱</b><span>약 <b>20.8</b> <small class="muted">nm</small></span><span class="bar ok"><i style="width:93%"></i></span><span class="pct">93%<small>22 이하일 확률</small></span></div>
+        <div class="resp"><b>⚠ 결함 수</b><span>약 <b>41</b> <small class="muted">ea</small></span><span class="bar low"><i style="width:41%"></i></span><span class="pct" style="color:var(--warn)">41%<small>40 이하일 확률 · 어려움</small></span></div>
+      </div>
+      <div class="gauge"><div class="ring" style="--p:58"><div><b>58</b><span>목표 달성</span></div></div><p class="small muted" style="margin-top:10px">응답 3개를 함께 본 점수</p></div>
+    </section>
+
+    <div class="section-title">편집 표 (엑셀처럼 입력 · 행에 마우스를 올리면 휴지통 · 드래그 선택)</div>
+    <section class="panel">
+      <div class="panel-head"><h3>다음에 할 실험</h3><span class="cnt">4건</span><span class="grow"></span>
+        <button class="small ghost">↻ 다시 고르기</button><button class="small">＋ 확인 실험 3회</button>
+        <span class="help-tip"><button>?</button><span class="tip">엑셀에서 복사해 <b>Ctrl+V</b> · 드래그해 고른 칸은 <b>Ctrl+C</b></span></span></div>
+      <div class="table-wrap"><table class="grid-table">
+        <thead><tr><th></th><th>런 ID</th><th class="r">연마제 농도<span class="req-mark"></span><span class="unit">wt%</span></th><th class="r">pH<span class="req-mark"></span></th><th class="r">제거율<span class="unit">nm/min</span></th><th>상태</th></tr></thead>
+        <tbody>
+          <tr><td class="del-cell"><button class="icon-btn danger" title="삭제">🗑</button></td><td class="ro">1차-01</td><td><input value="9.5"></td><td><input value="2.2"></td><td><input value="411"></td><td class="ro"><span class="status done"><i></i>완료</span></td></tr>
+          <tr><td class="del-cell"><button class="icon-btn danger" title="삭제">🗑</button></td><td class="ro">1차-02</td><td class="dev"><input value="9.2" title="계획 9.0"></td><td><input value="2.1"></td><td class="soft"><input value="4110" title="허용 범위 밖"></td><td class="ro"><span class="status done"><i></i>완료</span></td></tr>
+          <tr><td class="del-cell"><button class="icon-btn danger" title="삭제">🗑</button></td><td class="ro">1차-03</td><td data-sel><input value="9.0"></td><td data-sel><input value="2.3"></td><td class="bad"><input value="4o2"></td><td class="ro"><span class="status"><i></i>대기 <button class="link-btn small muted">못 함</button></span></td></tr>
+          <tr><td class="del-cell"><button class="icon-btn danger" title="삭제">🗑</button></td><td class="ro">1차-04</td><td><input value="9.0"></td><td><input value="2.4"></td><td><input placeholder="입력"></td><td class="ro"><span class="status fail"><i></i>실행불가</span></td></tr>
+        </tbody>
+      </table></div>
+      <p class="small muted" style="margin-top:10px">칸 상태: 노란 글자 = 계획과 다른 실제값 · 노란 칸 = 범위 밖(저장은 됨) · 빨간 칸 = 형식 오류(저장 안 함) · 파란 칸 = 드래그로 고른 범위</p>
+    </section>
+
+    <div class="section-title">버튼 · 입력 · 칩 · 알림</div>
+    <section class="panel stack">
+      <div class="row"><button class="primary">주 버튼</button><button>기본</button><button class="ghost">고스트</button><button class="danger">위험</button><button class="small">작은</button><button class="primary big">큰 주 버튼 →</button><button class="link-btn">링크 버튼</button></div>
+      <div class="row" style="align-items:flex-end">
+        <label class="field" style="width:220px"><span class="lbl">DOE 이름<span class="req-mark"></span></span><input type="text" placeholder="예: Poly-Si 식각 레시피"></label>
+        <label class="field" style="width:160px"><span class="lbl">목표</span><select><option>최대 (망대)</option></select></label>
+        <span class="seg"><button class="on">실패</button><button>실행 불가</button></span>
+        <label class="check"><input type="checkbox" checked>남은 실험만 보기</label>
+      </div>
+      <div class="row"><span class="chip">기본</span><span class="chip brand">할 일</span><span class="chip ok">완료</span><span class="chip warn">평가용</span><span class="chip err">실패</span></div>
+      <div class="notice info">ⓘ 엑셀에서 머리글까지 복사해 Ctrl+V 하면 열 이름으로 맞춰 넣습니다.</div>
+      <div class="notice warn">⚠ 아직 실험이 적어 예측이 정확하지 않을 수 있습니다.</div>
+      <div class="notice err">빨간 칸을 고쳐 주세요.</div>
+    </section>
+
+    <div class="section-title">첫 화면 카드</div>
+    <div class="todo-pills"><span>지금 할 일<b>2건</b></span><span>결과 입력 대기<b>4</b></span><span>새 추천 준비됨<b>1</b></span></div>
+    <div class="cards" style="margin-top:14px">
+      <a class="card-link" href="#"><b>CMP 슬러리 배합 최적화</b><span class="meta">김서연 · 멤버 1</span><span class="grow"></span><span class="bar"><i style="width:100%"></i></span><span class="small muted" style="margin-top:6px">실험 20 / 20 완료</span><span class="next">● 추천 레시피 확인 → 다음 실험 확정</span></a>
+      <a class="card-link blank" href="#"><b>＋ 새 DOE 만들기</b><span class="small">처음부터 설계하거나, 기존 데이터로 시작</span></a>
+    </div>
+
+    <div class="section-title">모달 · 토스트</div>
+    <div class="row" style="align-items:flex-start;gap:24px">
+      <div class="modal-back static-modal" style="flex:1;max-width:560px"><div class="modal" role="dialog">
+        <div class="modal-head"><h3>1차-06 실험을 못 했어요</h3><button class="icon-btn">✕</button></div>
+        <div class="modal-body"><p class="small muted">이 런은 학습에서 빠집니다. 되돌리기로 언제든 취소할 수 있습니다.</p></div>
+        <div class="modal-foot"><button>취소</button><button class="danger">표시</button></div>
+      </div></div>
+      <div class="toast">✓ 4행을 붙여넣었습니다.</div>
+    </div>
+
+    <div class="section-title">저장 막대 (실제로는 화면 아래에 고정 — position: sticky)</div>
+    <div class="save-bar" style="position: static; margin: 0"><span class="small muted">상태</span><select style="width:auto"><option>진행 중</option></select><input type="text" placeholder="변경 사유 (선택)" style="max-width:420px"><span class="grow"></span><button class="primary big">설정 저장</button></div>
+  </main>
+</div>
+<script>
+  function toggleTheme() {
+    const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem("redo.theme", t); } catch (e) {}
+  }
+  function toggleSide() { document.getElementById("shell").classList.toggle("side-collapsed"); }
+  addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") { e.preventDefault(); toggleSide(); } });
+  // 사이드바 오른쪽 가장자리 드래그로 너비 조절 (200~480px), 두 번 누르면 기본 264px
+  const shell = document.getElementById("shell"), rz = document.getElementById("resizer");
+  rz.addEventListener("pointerdown", (e) => {
+    const x0 = e.clientX, w0 = parseInt(getComputedStyle(shell).getPropertyValue("--side-w"));
+    document.body.classList.add("resizing");
+    const move = (ev) => shell.style.setProperty("--side-w", Math.min(480, Math.max(200, w0 + ev.clientX - x0)) + "px");
+    const up = () => { document.body.classList.remove("resizing"); removeEventListener("pointermove", move); removeEventListener("pointerup", up); };
+    addEventListener("pointermove", move); addEventListener("pointerup", up);
+  });
+  rz.addEventListener("dblclick", () => shell.style.setProperty("--side-w", "264px"));
+</script>
+</body>
+</html>

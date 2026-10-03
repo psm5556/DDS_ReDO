@@ -6,6 +6,7 @@
 ![능동학습 결과 화면](docs/manual/img/12-step2.png)
 
 - **처음 쓰는 분**: [사용 매뉴얼](docs/USER_MANUAL.md) (그림으로 보는 단계별 안내)
+- **이 UI 디자인을 다른 프로젝트에 쓰려면**: [DESIGN.md](DESIGN.md) (토큰·컴포넌트·레이아웃·UX 규칙, 복사해 쓰는 [tokens.css](frontend/src/design/tokens.css) + [kit.css](frontend/src/design/kit.css), [미리보기](docs/design/preview.html))
 - **개발자**: 개발 지침은 [`CLAUDE.md`](CLAUDE.md), 현재 상태와 남은 작업은 [`docs/HANDOFF.md`](docs/HANDOFF.md)를 보세요.
 
 ## 사용 흐름
@@ -38,7 +39,8 @@ backend/    FastAPI + SQLAlchemy(SQLite/PostgreSQL) + scikit-learn(GP), 선택�
 frontend/   React + TypeScript + Vite + Plotly
   src/pages, src/guide, src/sections, src/components    e2e/  Playwright E2E
   scripts/manual-shots.mjs  사용 매뉴얼 그림 생성
-docs/       HANDOFF.md(진행 상황), USER_MANUAL.md(사용 매뉴얼), manual/img(매뉴얼 그림)
+docs/       HANDOFF.md(진행 상황), USER_MANUAL.md(사용 매뉴얼), manual/img(매뉴얼 그림), design/(UI 키트 미리보기)
+DESIGN.md   디자인 시스템 — 다른 프로젝트에 재사용하는 방법
 ```
 
 ## 로컬 실행 (Windows PowerShell)

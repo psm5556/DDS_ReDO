@@ -119,6 +119,11 @@ claude.ai 대화에서 만든 첫 구현을 Claude Code로 이어서 개발하�
    - 다크 모드: html[data-theme] + 토큰(styles.css). 사이드바 아래 ☀/☾ 버튼, 처음엔 OS 설정, 바꾸면 기억(theme.ts). 주 버튼은 두 테마 모두 #2563eb
    - 사용 매뉴얼 docs/USER_MANUAL.md + 그림 23장(docs/manual/img). 그림은 frontend/scripts/manual-shots.mjs(npm run manual:shots)로 깨끗한 manual.db에서 다시 생성 — 방법은 README
    - 테스트: pytest 39개, E2E 47개 (sidebar.spec.ts: 너비·접기·다크 모드)
+2-8. ~~디자인 시스템 문서화 (다른 프로젝트 재사용)~~ (2026-10-03)
+   - DESIGN.md(루트): 적용 순서·원칙·토큰 표(밝은/어두운)·레이아웃·컴포넌트 마크업·UX 규칙·하지 말 것·점검표
+   - frontend/src/design/tokens.css: 토큰 단일 원본(앱도 이 파일을 먼저 불러옴, styles.css에서 분리)
+   - frontend/src/design/kit.css: 프레임워크 무관 컴포넌트 CSS(앱과 같은 값, 일반적인 클래스 이름). 앱 스타일을 바꾸면 함께 맞출 것
+   - docs/design/preview.html(+ preview-light/dark.png): 키트 두 파일만으로 그리는 미리보기
 3. 주요 화면 사용성 점검 (CLAUDE.md 7.6절): 실제 엔지니어 3~5명 대상 테스트 계획 작성.
 4. 사내 개발 전환 시 작업 (아래 "프로토타입 단순화" 해소).
 

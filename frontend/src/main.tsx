@@ -6,6 +6,7 @@ import { AuthProvider } from "./auth";
 import { ToastProvider } from "./toast";
 // 한글 Pretendard(OFL, 앱에 포함 — 외부 CDN 없음). 글자 범위별로 필요한 조각만 내려받는다
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+import "./design/tokens.css";
 import "./styles.css";
 import { applyTheme, initialTheme } from "./theme";
 import "./layout.css";
