@@ -6,24 +6,21 @@ claude.ai 대화에서 만든 첫 구현을 Claude Code로 이어서 개발하�
 ## 현재 상태 요약
 | 영역 | 상태 |
 |---|---|
-| 백엔드 (FastAPI) | 구현 완료, `pytest` 18개 통과 |
+| 백엔드 (FastAPI) | 구현 완료, `pytest` 19개 통과 |
 | 모델링 (GP, 획득, 검증) | 구현 완료, 합성 데이터로 검증 |
 | TabPFN 어댑터 | **코드만 작성, 실제 실행 미검증** (가중치 없는 환경에서 작성) |
-| 프론트엔드 (React) | 대부분 작성. **화면 3개 미작성 → 빌드 실패 상태** |
+| 프론트엔드 (React) | 전 화면 작성·브라우저 점검 완료, `npm run build` 통과, E2E(결과 입력 그리드) 7개 통과 |
 | 사내 로그인 연계 | 구조만 준비 (`backend/app/auth/corporate.py`), 사양 대기 |
 
 ## 남은 작업 (우선순위 순)
-1. **프론트엔드 미작성 화면 3개** — `frontend/src/App.tsx`가 import하고 있어 현재 `npm run build`가 실패합니다.
-   - `pages/RunEntryPage.tsx` (`/projects/:pid/runs/:rid`): QR 스캔으로 들어오는 런 1건 입력 화면.
-     `GET /api/projects/{pid}/runs/{rid}`로 불러와 `components/RunCard.tsx`를 그대로 사용하고, 저장은 `POST /api/projects/{pid}/results`.
-     저장 후 같은 배치의 다음 미완료 런으로 이동하는 버튼을 둡니다. 태블릿 기준으로 큰 입력칸.
-   - `pages/PrintPage.tsx` (`/projects/:pid/print?batch=<id>`): A4 인쇄용 실험 시트. TopBar 없음(`no-print` 클래스, `styles.css`의 `.print-sheet`).
-     런 ID, 실행 순서, 인자 계획값(단위·세팅 정밀도), 반복 표시, 응답 기입란(빈 칸), 메모란, **런별 QR 코드**(`qrcode` 패키지, 내용은 `${origin}/projects/{pid}/runs/{runId}`). 상단에 프로젝트명·배치·인쇄일, `window.print()` 버튼.
-   - `pages/SharedPage.tsx` (`/shared/:token`): 공유받은 예측 페이지.
-     `GET /api/shared/{token}` 응답(프로젝트·인자·응답·best·surface·effects·warnings·validation·raw)을 `RecipeCard`, `TwinMaps`(initial=응답의 surface, `view_simulate`일 때만 `POST /api/shared/{token}/surface`로 축 변경), `EffectsPlots`, `WhatIf`(`POST /api/shared/{token}/predict`)로 표시.
-     상단에 소유자, 스냅샷 기준 시각 또는 "실시간", TabPFN이면 "평가용" 표시. 403이면 "접근 권한이 없습니다" + 접근 요청(`POST /api/shared/{token}/request-access`, 메시지 입력), 410이면 철회·만료 안내.
-2. `npm run build` 통과 후 브라우저에서 전체 흐름 점검: 로그인 → 데모 프로젝트 → 결과 입력(붙여넣기·자동저장·엑셀 업로드) → 분석 → 제안 → 배치 생성 → 공유 → 다른 계정으로 열람.
-   발견한 화면 오류를 고치고, 프론트엔드 E2E 테스트(결과 입력 그리드)를 추가합니다 (CLAUDE.md 10장).
+1. ~~프론트엔드 미작성 화면 3개~~ — 완료: `pages/RunEntryPage.tsx`(QR 진입 런 입력, 다음 미완료 런 이동), `pages/PrintPage.tsx`(A4 시트, 런별 QR, 제안 모델 표시), `pages/SharedPage.tsx`(공유 예측, 403 접근 요청 / 410 철회·만료 안내). 타입 검사·빌드만 확인했고 브라우저 점검은 2번에서 합니다.
+2. ~~브라우저 전체 흐름 점검 + 결과 입력 그리드 E2E~~ — 완료 (2026-10-03). 고친 것:
+   - 결과 입력 그리드: '남은 실험만' 상태에서 자동 저장 시 방금 입력한 행이 사라지고 행 번호가 밀리던 문제 (보이는 행 목록을 필터 변경·재조회 때만 갱신)
+   - 다음 실험 제안: 제안점의 μ·σ·규격 확률이 Kriging Believer 가상 관측으로 재적합한 모델에서 나와 실제보다 확실해 보이던 문제 (실제 데이터만으로 적합한 모델로 표시)
+   - 사용자 검색: 검색어 없이 전체 사용자 목록을 내주던 API·화면 (개인정보 최소화)
+   - 엑셀 업로드 오류 문구에 응답 키 대신 이름 표시, 화면 레이아웃(개요·인쇄 시트·태블릿 탭·런 ID 줄바꿈), 403 문구, React Router v7 경고
+   - E2E 실행: `cd frontend; $env:REDO_PYTHON="<python 경로>"; npm run e2e` (별도 `backend/e2e.db`, 포트 8011/5181, 설치된 Chrome 사용)
+2-1. **미해결 — 결정 필요**: 배치 구성(Kriging Believer)의 가상 관측이 산포 모델에도 반복 측정처럼 들어가 해당 조건의 σ가 0 근처로 줄어듦 → `robust` 모드에서 진행 중 런·이미 고른 점 근처를 과대 선호할 수 있음. 진행 중 런과 같은 조건이 '신규'로 다시 제안되기도 함. 수정 방향은 사용자 확인 후 진행 (CLAUDE.md 11장: 통계 동작 변경).
 3. 주요 화면 사용성 점검 (CLAUDE.md 7.6절): 실제 엔지니어 3~5명 대상 테스트 계획 작성.
 4. 사내 개발 전환 시 작업 (아래 "프로토타입 단순화" 해소).
 
@@ -40,7 +37,7 @@ claude.ai 대화에서 만든 첫 구현을 Claude Code로 이어서 개발하�
 ## 검증되지 않은 것
 - TabPFN: `tabpfn` 패키지의 `TabPFNRegressor(model_path=..., n_estimators=..., random_state=...)`, `predict(X, output_type="mean" | "quantiles", quantiles=[...])` 사용을 가정했습니다.
   사내 서버에서 설치 버전 문서로 API를 확인하고, 네트워크 차단 상태에서 로드·예측되는지, 텔레메트리 비활성화가 되는지 테스트를 추가하십시오. 라이선스 확인 전에는 기능 플래그를 켜지 마십시오.
-- 프론트엔드 전체: 타입 검사는 미작성 화면 3개를 빼면 통과했지만, 브라우저에서 실행해 보지 않았습니다.
+- 프론트엔드 전체: `npm run build`(tsc + vite)는 통과했지만, 브라우저에서 실행해 보지 않았습니다.
 
 ## 데모 데이터 (`python -m app.seed --reset`)
 - 조직: 반도체사업부(식각공정개발팀, 증착공정개발팀), 디스플레이사업부, 소재사업부

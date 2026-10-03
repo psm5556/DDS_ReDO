@@ -36,6 +36,7 @@ export default function ResultsSection() {
   const rs = project.config.responses;
   const draftKey = `redo.draft.${project.id}`;
   const [runs, setRuns] = useState<Run[] | null>(null);
+  const [loadSeq, setLoadSeq] = useState(0);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [batch, setBatch] = useState<number | "all">("all");
   const [onlyOpen, setOnlyOpen] = useState(project.runs_open > 0);
@@ -55,7 +56,7 @@ export default function ResultsSection() {
 
   const load = useCallback(async () => {
     const [rr, bs] = await Promise.all([get<Run[]>(`/api/projects/${project.id}/runs`), get<Batch[]>(`/api/projects/${project.id}/batches`)]);
-    setRuns(rr); setBatches(bs);
+    setRuns(rr); setBatches(bs); setLoadSeq((n) => n + 1);
   }, [project.id]);
   useEffect(() => { void load(); }, [load]);
 
@@ -73,9 +74,16 @@ export default function ResultsSection() {
     { kind: "note" as const, key: "note" },
   ], [fs, rs]);
 
-  const shown = useMemo(() => (runs ?? []).filter((r) =>
-    (batch === "all" || r.batch_id === batch) && (!onlyOpen || r.status === "planned" || r.status === "running" || edits[r.id])), [runs, batch, onlyOpen]);
-  // onlyOpen 필터는 입력 중 행이 사라지지 않도록 편집 시작 시점 기준으로만 재계산
+  // 보이는 행 목록은 필터를 바꾸거나 목록을 다시 불러올 때만 다시 정한다.
+  // 자동 저장으로 런이 '완료'가 되어도 입력 중인 행이 사라지거나 행 번호(cell-행-열)가 밀리지 않게 하기 위함.
+  const [visibleIds, setVisibleIds] = useState<Set<number> | null>(null);
+  useEffect(() => {
+    if (!runs) return;
+    setVisibleIds(new Set(runs.filter((r) => (batch === "all" || r.batch_id === batch)
+      && (!onlyOpen || r.status === "planned" || r.status === "running" || edits[r.id])).map((r) => r.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch, onlyOpen, loadSeq]);
+  const shown = useMemo(() => (runs ?? []).filter((r) => visibleIds?.has(r.id)), [runs, visibleIds]);
 
   const base = (r: Run): Edit => ({
     actual: Object.fromEntries(fs.map((f) => [f.key, String(r.actual[f.key] ?? r.planned[f.key])])),
@@ -260,7 +268,7 @@ export default function ResultsSection() {
     toast(`${rows.length}개 런을 반영했습니다.`);
   };
 
-  if (!runs) return <div className="busy"><span className="spinner" /> 불러오는 중</div>;
+  if (!runs || !visibleIds) return <div className="busy"><span className="spinner" /> 불러오는 중</div>;
   if (runs.length === 0) return <div className="panel empty"><h3>입력할 실험이 없습니다</h3><p>먼저 실험 계획을 만드세요.</p></div>;
 
   const stateText: Record<SaveState, string> = {

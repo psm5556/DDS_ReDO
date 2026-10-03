@@ -134,6 +134,7 @@ def parse_upload(filename: str, content: bytes, project: Project, cfg: ProjectCo
     keys = [label_to_key.get(h) for h in header]
     if "code" not in keys:
         return [], ["'런 ID' 열을 찾을 수 없습니다. 앱에서 내려받은 실험 시트 양식을 사용하세요."]
+    names = {f"act:{f.key}": f.name for f in cfg.factors} | {f"val:{r.key}": r.name for r in cfg.responses}
     out: list[dict] = []
     for raw in rows[1:]:
         if all(v is None or str(v).strip() == "" for v in raw):
@@ -147,13 +148,13 @@ def parse_upload(filename: str, content: bytes, project: Project, cfg: ProjectCo
             elif k.startswith("act:"):
                 n = _num(v)
                 if n == "invalid":
-                    rec["errors"].append(f"{k[4:]} 실제값이 숫자가 아닙니다: {v}")
+                    rec["errors"].append(f"{names.get(k, k[4:])} 실제값이 숫자가 아닙니다: {v}")
                 elif n is not None:
                     rec["actual"][k[4:]] = n
             elif k.startswith("val:"):
                 n = _num(v)
                 if n == "invalid":
-                    rec["errors"].append(f"{k[4:]} 결과값이 숫자가 아닙니다: {v}")
+                    rec["errors"].append(f"{names.get(k, k[4:])} 결과값이 숫자가 아닙니다: {v}")
                 else:
                     rec["values"][k[4:]] = n
             elif k == "status" and v is not None and str(v).strip():

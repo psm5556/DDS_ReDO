@@ -23,6 +23,8 @@ def surrogates(user: User = Depends(get_current_user)) -> list[dict]:
 
 @router.get("/users/search", response_model=list[UserOut])
 def search_users(q: str = "", db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[UserOut]:
+    if not q.strip():  # 검색어 없이 전체 사용자 목록을 내주지 않음 (개인정보 최소화, CLAUDE.md 8.5절)
+        return []
     return [user_out(u) for u in get_auth_provider().search_users(db, q, 20)]
 
 

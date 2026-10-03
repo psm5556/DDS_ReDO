@@ -19,6 +19,7 @@ export function TargetPicker({ kinds, value, onChange }: {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const wantUser = kinds.includes("user"), wantOrg = kinds.includes("org");
   useEffect(() => {
+    if (!q.trim()) { setUsers([]); setOrgs([]); return; }
     const t = setTimeout(async () => {
       if (wantUser) setUsers(await get<User[]>(`/api/users/search?q=${encodeURIComponent(q)}`).catch(() => []));
       if (wantOrg) setOrgs(await get<Org[]>(`/api/org-units?q=${encodeURIComponent(q)}`).catch(() => []));
@@ -49,7 +50,7 @@ export function TargetPicker({ kinds, value, onChange }: {
               <td colSpan={2}>{o.name}</td><td className="muted">{o.type === "department" ? "부서 전체" : "사업부 전체"}</td>
             </tr>
           ))}
-          {users.length === 0 && orgs.length === 0 && <tr><td className="muted">검색 결과가 없습니다.</td></tr>}
+          {users.length === 0 && orgs.length === 0 && <tr><td className="muted">{q.trim() ? "검색 결과가 없습니다." : `${wantUser && wantOrg ? "이름·사번·조직명" : wantOrg ? "부서·사업부 이름" : "이름 또는 사번"}을 입력하세요.`}</td></tr>}
         </tbody></table>
       </div>
     </div>

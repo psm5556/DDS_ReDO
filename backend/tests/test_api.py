@@ -183,3 +183,10 @@ def test_excel_roundtrip_preview(client_for):
                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
     assert r.status_code == 200, r.text
     assert r.json()["summary"]["errors"] >= 1
+
+
+def test_user_search_requires_query(client_for):
+    c = client_for("E2001")
+    assert c.get("/api/users/search?q=").json() == []
+    assert c.get("/api/users/search?q=%20").json() == []
+    assert [u["user_key"] for u in c.get("/api/users/search?q=김서연").json()] == ["E1001"]

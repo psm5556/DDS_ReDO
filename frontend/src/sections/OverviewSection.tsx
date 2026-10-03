@@ -81,7 +81,7 @@ export default function OverviewSection() {
       <section className="grid-2">
         <div className="panel">
           <div className="panel-head"><h3>진행 상황</h3></div>
-          <div className="metrics">
+          <div className="metrics" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
             <div className="metric"><div className="metric-label">완료한 실험</div><div className="metric-value">{project.runs_done}</div><div className="metric-sub">예산 {st.budget_runs}회 중</div></div>
             <div className="metric"><div className="metric-label">남은 실험</div><div className="metric-value">{project.runs_open}</div></div>
             <div className="metric"><div className="metric-label">배치</div><div className="metric-value">{project.batches}</div></div>

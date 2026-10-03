@@ -124,6 +124,7 @@ def propose_batch(space: Space, data: TrainingData, pending: np.ndarray, make_mo
     alea_med = float(np.median(pred_obs.aleatoric_var))
     extrap = is_extrapolation(space, data, pool)
 
+    picks: list[tuple[int, float]] = []
     for _ in range(q):
         pred = model.predict(pool)
         acq = acquisition_values(pred, obj, incumbent, seed)
@@ -132,7 +133,22 @@ def propose_batch(space: Space, data: TrainingData, pending: np.ndarray, make_mo
         if not np.isfinite(acq[i]):
             break
         chosen.append(i)
-        p1 = pred.take([i])
+        picks.append((i, float(acq[i])))
+        # Kriging Believer: 예측 평균을 가상 관측으로 추가 후 재적합 (점 선택에만 사용)
+        believer = believer.with_extra(pool[i:i + 1], pred.mean[i:i + 1])
+        model.fit(believer, seed=seed, fast=True)
+
+    # 사용자에게 보여 주는 예측값은 가상 관측이 섞이지 않은, 실제 데이터만으로 적합한 모델에서 계산한다.
+    # (가상 관측으로 재적합한 모델은 선택한 점 주변의 불확실성·산포를 실제보다 작게 보여 준다)
+    if believer is not data:
+        model = make_model()
+        model.fit(data, seed=seed)
+        pred_obs = model.predict(data.X_pts)
+        alea_med = float(np.median(pred_obs.aleatoric_var))
+    if picks:
+        shown = model.predict(pool[[i for i, _ in picks]])
+    for j, (i, a) in enumerate(picks):
+        p1 = shown.take([j])
         es = float(expected_score(p1, obj)[0]) if obj.mode != "explore" else float("nan")
         key = space.point_key(pool[i])
         kind = "replicate" if key in observed else "new"
@@ -142,13 +158,10 @@ def propose_batch(space: Space, data: TrainingData, pending: np.ndarray, make_mo
                                        float(p1.epistemic_var[0]), float(p1.aleatoric_var[0]), bool(extrap[i]))
         proposals.append(Proposal(
             x=space.to_dicts(pool[i])[0], kind=kind, reason_type=reason_type, reason=reason,
-            acquisition=float(acq[i]), mean=float(p1.mean[0]), mean_lo=float(lo[0]), mean_hi=float(hi[0]),
+            acquisition=a, mean=float(p1.mean[0]), mean_lo=float(lo[0]), mean_hi=float(hi[0]),
             sigma=float(np.sqrt(p1.aleatoric_var[0])), sigma_lo=float(np.sqrt(p1.aleatoric_var_lo[0])),
             sigma_hi=float(np.sqrt(p1.aleatoric_var_hi[0])), spec_prob=None if sp is None else float(sp),
             expected_score=es, extrapolation=bool(extrap[i])))
-        # Kriging Believer: 예측 평균을 가상 관측으로 추가 후 재적합
-        believer = believer.with_extra(pool[i:i + 1], p1.mean)
-        model.fit(believer, seed=seed, fast=True)
     return ProposalResult(proposals=proposals, objective=obj.label, incumbent=incumbent, pool_size=len(pool),
                           notes=notes)
 
