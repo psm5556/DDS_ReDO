@@ -33,7 +33,7 @@ test("외부 표(머리글 포함)를 인자·응답 그리드에 한 번에 붙
   await expect(page.getByLabel("목표 2행", { exact: true })).toHaveValue("minimize");
   await expect(page.getByLabel("가중치 1행", { exact: true })).toHaveValue("2");
   await page.getByRole("button", { name: "DOE 만들기" }).click();
-  await expect(page.getByRole("heading", { name: "첫 DOE를 생성하세요" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "어떻게 시작할까요?" })).toBeVisible();
   const list = await (await page.request.get("/api/projects?scope=mine")).json() as { id: number; name: string }[];
   const p = await (await page.request.get(`/api/projects/${list.find((x) => x.name === name)!.id}`)).json();
   expect(p.config.factors.map((f: { name: string }) => f.name)).toEqual(["RF 파워", "압력", "Cl2 유량"]);

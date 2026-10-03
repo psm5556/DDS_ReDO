@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useGridSelect } from "../gridSelect";
 import { parseClipboard } from "../paste";
 import { useToast } from "../toast";
@@ -35,9 +35,13 @@ function toOption<R>(c: GridCol<R>, raw: string): string | null {
 
 const isReq = <R,>(c: GridCol<R>, r: R) => (typeof c.required === "function" ? c.required(r) : !!c.required);
 
-export function EditGrid<R extends Record<string, unknown>>({ name, rows, cols, onChange, makeRow, canAdd = true, canRemove, errors, addLabel, minRows = 1, showMissing = false }: {
+export function EditGrid<R extends Record<string, unknown>>({ name, rows, cols, onChange, makeRow, canAdd = true, canRemove, errors, addLabel, minRows = 1, showMissing = false, onPasted, pasteAnywhere = false }: {
   name: string; rows: R[]; cols: GridCol<R>[]; onChange: (rows: R[]) => void; makeRow: (existing: R[]) => R;
   canAdd?: boolean; canRemove?: (r: R) => boolean; errors?: (r: R) => string[]; addLabel: string; minRows?: number; showMissing?: boolean;
+  /** 붙여넣은 뒤: 들어간 행 수, 머리글 중 표에 없는 열 이름(무시함) */
+  onPasted?: (info: { rows: number; ignored: string[]; header: boolean }) => void;
+  /** 입력 칸을 고르지 않고 화면 어디서 Ctrl+V 해도 이 표에 붙여넣기 (빈 행부터) */
+  pasteAnywhere?: boolean;
 }) {
   const id = (r: number, c: number) => `${name}-${r}-${c}`;
   const toast = useToast();
@@ -56,7 +60,8 @@ export function EditGrid<R extends Record<string, unknown>>({ name, rows, cols, 
     const m = el.id.match(/-(\d+)-(\d+)$/);
     if (m) pasteText(text, Number(m[1]), Number(m[2]));
   });
-  const pasteText = (text: string, row: number, col: number) => {
+  /** fixedRow: 머리글이 있어도 row부터 (화면 어디서나 붙여넣기: 이미 입력한 행 아래부터) */
+  const pasteText = (text: string, row: number, col: number, fixedRow = false) => {
     const lines = parseClipboard(text);
     if (!lines.length) return;
     // 머리글 행이면 열 이름으로 맞춘다 (2개 이상 일치할 때)
@@ -66,7 +71,7 @@ export function EditGrid<R extends Record<string, unknown>>({ name, rows, cols, 
     });
     const isHead = head.filter((x) => x >= 0).length >= 2;
     const body = isHead ? lines.slice(1) : lines;
-    const start = isHead ? 0 : row;
+    const start = isHead && !fixedRow ? 0 : row; // 머리글이 있으면 첫 행부터 열 이름으로 맞춘다
     const next = [...rows];
     body.forEach((cells, i) => {
       const at = start + i;
@@ -88,7 +93,31 @@ export function EditGrid<R extends Record<string, unknown>>({ name, rows, cols, 
       next[at] = r;
     });
     onChange(next);
+    onPasted?.({ rows: body.length, header: isHead, ignored: isHead ? lines[0].filter((h, j) => h.trim() && head[j] < 0) : [] });
   };
+  const pasteRef = useRef(pasteText);
+  pasteRef.current = pasteText;
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const colsRef = useRef(cols);
+  colsRef.current = cols;
+  useEffect(() => {
+    if (!pasteAnywhere) return;
+    const h = (e: ClipboardEvent) => {
+      const a = document.activeElement as HTMLElement | null;
+      if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT" || a.isContentEditable)) return;
+      const text = e.clipboardData?.getData("text") ?? "";
+      if (!text.trim()) return;
+      e.preventDefault();
+      // 이미 입력한 마지막 행 다음부터 (선택 상자·읽기 전용 칸은 내용으로 보지 않음)
+      const filled = (r: R) => colsRef.current.some((c) => c.type !== "select" && !c.disabled?.(r) && String(r[c.key] ?? "").trim() !== "");
+      let last = -1;
+      rowsRef.current.forEach((r, i) => { if (filled(r)) last = i; });
+      pasteRef.current(text, last + 1, 0, true);
+    };
+    document.addEventListener("paste", h);
+    return () => document.removeEventListener("paste", h);
+  }, [pasteAnywhere]);
 
   return (
     <div>

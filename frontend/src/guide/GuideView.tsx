@@ -1,10 +1,11 @@
-import { AlertTriangle, CheckCircle2, CircleDot, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDot, ClipboardPaste, Plus, RefreshCw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { get, post } from "../api";
 import { Confirm } from "../components/Modal";
 import { EditGrid, type GridCol } from "../components/EditGrid";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { ImportData } from "../components/ImportData";
 import { MultiWhatIf } from "../components/MultiWhatIf";
 import { fmtFactor, fmtResp, pct, snap } from "../format";
 import { can, useProject } from "../project";
@@ -36,18 +37,18 @@ export default function GuideView() {
 
   return (
     <div className="guide">
-      <Stepper step={step} allowed={allowed} round={round} open={project.runs_open} onGo={go} />
-      {step === 0 && <StepStart onDone={() => go(1)} />}
+      <Stepper step={step} allowed={allowed} round={round} open={project.runs_open} onGo={go} started={batches.length > 0} />
+      {step === 0 && <StepStart onDone={() => go(1)} onImported={(allDone) => go(allDone ? 2 : 1)} />}
       {step === 1 && <StepExperiment batches={batches} onNext={() => go(2)} />}
       {step === 2 && <StepLearn onDone={() => go(1)} />}
     </div>
   );
 }
 
-function Stepper({ step, allowed, round, open, onGo }: { step: Step; allowed: Step[]; round: number; open: number; onGo: (s: Step) => void }) {
+function Stepper({ step, allowed, round, open, onGo, started }: { step: Step; allowed: Step[]; round: number; open: number; onGo: (s: Step) => void; started: boolean }) {
   return (
     <nav className="stepper" aria-label="진행 단계">
-      <span className="round">{round > 0 ? `${round}차` : "시작"}</span>
+      <span className="round">{round > 0 || started ? `${round}차` : "시작"}</span>
       <ol>
         {STEPS.map((s) => {
           let state = step === 0 ? (s.n === 1 ? "now" : "todo") : s.n === step ? "now" : s.n < step ? "done" : "todo";
@@ -77,10 +78,11 @@ function StepHead({ title, children }: { title: string; children?: ReactNode }) 
 }
 
 // ---------- 0. 첫 DOE 생성 ----------
-function StepStart({ onDone }: { onDone: () => void }) {
+function StepStart({ onDone, onImported }: { onDone: () => void; onImported: (allDone: boolean) => void }) {
   const { project, reload } = useProject();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
   const st = project.config.settings;
   const d = project.config.factors.length;
   const initPts = st.initial_points ?? Math.max(2 * d + 2, 10);
@@ -96,14 +98,35 @@ function StepStart({ onDone }: { onDone: () => void }) {
       onDone();
     } catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   };
+  if (!can(project.my_role, "editor")) {
+    return (
+      <section className="panel step-panel">
+        <StepHead title="아직 실험이 없습니다">편집자가 첫 DOE를 생성하거나 기존 데이터를 가져오면 시작할 수 있습니다.</StepHead>
+      </section>
+    );
+  }
+  if (importing) {
+    return (
+      <section className="panel step-panel">
+        <StepHead title="기존 실험 데이터 가져오기">이미 해 둔 실험 결과로 바로 학습하고, 다음에 할 실험을 제안받습니다.</StepHead>
+        <ImportData start onCancel={() => setImporting(false)} onDone={(r) => onImported(r.done > 0 && r.done === r.imported)} />
+      </section>
+    );
+  }
   return (
     <section className="panel step-panel">
-      <StepHead title="첫 DOE를 생성하세요">{initPts}개 조건 · 총 {initRuns}회 ({rep}개 조건은 {st.replicates_per_point}회 반복)</StepHead>
-      <div className="step-foot">
-        <span className="grow" />
-        {can(project.my_role, "editor")
-          ? <button className="primary big" disabled={busy} onClick={make}>{busy ? "생성 중…" : "첫 DOE 생성 →"}</button>
-          : <span className="muted">편집자가 첫 DOE를 생성하면 시작할 수 있습니다.</span>}
+      <StepHead title="어떻게 시작할까요?" />
+      <div className="start-choices">
+        <button className="choice" disabled={busy} onClick={make}>
+          <Sparkles size={22} />
+          <b>{busy ? "생성 중…" : "새로 설계"}</b>
+          <span>첫 DOE {initPts}개 조건 · 총 {initRuns}회 ({rep}개 조건은 {st.replicates_per_point}회 반복)</span>
+        </button>
+        <button className="choice" disabled={busy} onClick={() => setImporting(true)}>
+          <ClipboardPaste size={22} />
+          <b>기존 데이터로 시작</b>
+          <span>이미 해 둔 실험 결과를 엑셀에서 붙여넣기</span>
+        </button>
       </div>
     </section>
   );

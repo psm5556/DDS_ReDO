@@ -11,10 +11,11 @@ from ..authz import require_project
 from ..db import get_db
 from ..modeling.design import initial_design
 from ..models import DesignBatch, Measurement, Project, Run, User
-from ..schemas import (BatchOut, ExcludeIn, InitialDesignIn, ManualRunIn, ProjectConfig, ResultRow, ResultsIn, RunOut)
+from ..schemas import (BatchOut, ExcludeIn, ImportIn, ImportOut, InitialDesignIn, ManualRunIn, ProjectConfig, ResultRow,
+                       ResultsIn, RunOut)
 from ..services.analysis import fitted_model, load_training, space_of
 from ..services.common import project_config
-from ..services.excel import build_runsheet, parse_upload
+from ..services.excel import build_runsheet, build_table_export, parse_upload
 from ..services.results import apply_row, current_measurements, prediction_checks, static_checks
 
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["runs"])
@@ -144,6 +145,73 @@ def manual_batch(project_id: int, body: ManualRunIn, db: Session = Depends(get_d
     return _batch_out(db, b)
 
 
+IMPORT_SEQ = 0  # 기존 데이터는 '0차'로 묶는다 (앱이 제안한 실험은 1차부터)
+
+
+@router.post("/import", response_model=ImportOut)
+def import_existing(project_id: int, body: ImportIn, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)) -> ImportOut:
+    """이미 해 둔 실험 데이터 가져오기. 같은 조건이 여러 행이면 반복 측정으로 본다.
+    인자 값은 세팅 정밀도로 반올림하지 않는다 (실제로 세팅한 값이므로 그대로 학습)."""
+    import math
+
+    p, _ = require_project(db, user, project_id, "editor")
+    cfg = project_config(p)
+    fs = {f.key: f for f in cfg.factors}
+    rkeys = {r.key for r in cfg.responses}
+    problems: list[str] = []
+    for i, row in enumerate(body.rows, start=1):
+        for f in cfg.factors:
+            v = row.x.get(f.key)
+            if v is None or not math.isfinite(v):
+                problems.append(f"{i}행: '{f.name}' 값이 없습니다.")
+            elif not (f.low - 1e-9 <= v <= f.high + 1e-9):
+                problems.append(f"{i}행: '{f.name}' {v:g}이(가) 설정 범위({f.low:g}~{f.high:g}) 밖입니다.")
+        unknown = [k for k in list(row.x) if k not in fs] + [k for k in row.values if k not in rkeys]
+        if unknown:
+            problems.append(f"{i}행: 알 수 없는 열 {', '.join(unknown)}")
+        bad = [k for k, v in row.values.items() if v is not None and not math.isfinite(v)]
+        if bad:
+            problems.append(f"{i}행: 숫자가 아닌 결과 {', '.join(bad)}")
+    if problems:
+        more = f" 외 {len(problems) - 5}건" if len(problems) > 5 else ""
+        raise HTTPException(422, " ".join(problems[:5]) + more)
+
+    b = db.scalar(select(DesignBatch).where(DesignBatch.project_id == p.id, DesignBatch.seq == IMPORT_SEQ))
+    if b is None:
+        b = DesignBatch(project_id=p.id, seq=IMPORT_SEQ, kind="import", acquisition={}, seed=0, note="기존 데이터",
+                        created_by=user.id)
+        db.add(b)
+        db.flush()
+    existing = list(db.scalars(select(Run).where(Run.batch_id == b.id)))
+    n = len(existing)
+    key = lambda x: tuple(round(float(x[f.key]), 9) for f in cfg.factors)  # noqa: E731
+    count: dict[tuple, int] = {}
+    for r in existing:
+        if r.status != "excluded":
+            count[key(r.actual or r.planned)] = count.get(key(r.actual or r.planned), 0) + 1
+    current: dict = {}
+    done = 0
+    for row in body.rows:
+        x = {f.key: float(row.x[f.key]) for f in cfg.factors}
+        k = key(x)
+        count[k] = count.get(k, 0) + 1
+        n += 1
+        run = Run(project_id=p.id, batch_id=b.id, code=run_code(IMPORT_SEQ, n), replicate_no=count[k], run_order=n,
+                  is_replicate_of_existing=False, status="planned", planned=x, actual=dict(x),
+                  reason="가져온 기존 실험 데이터입니다.", deviation_note=row.note)  # 메모 칸
+        db.add(run)
+        db.flush()
+        vals = {rk: v for rk, v in row.values.items() if v is not None}
+        if vals:
+            apply_row(db, user, p, cfg, run, ResultRow(run_id=run.id, values=vals), current)
+        done += run.status == "done"
+    audit(db, user.id, "data.import", "project", p.id, rows=len(body.rows), done=done)
+    db.commit()
+    return ImportOut(batch=_batch_out(db, b), imported=len(body.rows), done=done,
+                     replicated_conditions=sum(1 for c in count.values() if c >= 2))
+
+
 @router.get("/runs", response_model=list[RunOut])
 def list_runs(project_id: int, batch_id: int | None = None, status: str | None = None, db: Session = Depends(get_db),
               user: User = Depends(get_current_user)) -> list[RunOut]:
@@ -255,6 +323,25 @@ def exclude(project_id: int, run_id: int, body: ExcludeIn, db: Session = Depends
           run=r.code, response=body.response_key, reason=body.reason)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/runs.xlsx")
+def export_runs(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> Response:
+    """실험 표 엑셀 다운로드 (화면의 표와 같은 열, 삭제한 런 제외)"""
+    from urllib.parse import quote
+
+    p, _ = require_project(db, user, project_id)
+    cfg = project_config(p)
+    runs = list(db.scalars(select(Run).where(Run.project_id == p.id, Run.status != "excluded")))
+    seq = _seq_map(db, p.id)
+    runs.sort(key=lambda r: (seq.get(r.batch_id, 0), r.run_order))
+    data = build_table_export(p, cfg, runs, current_measurements(db, [r.id for r in runs]))
+    audit(db, user.id, "data.export", "project", p.id, runs=len(runs))
+    db.commit()
+    safe = "".join(ch for ch in p.name if ch not in '\\/:*?"<>|').strip() or f"DOE_{p.id}"
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f"attachment; filename=\"ReDO_{p.id}.xlsx\"; "
+                                                    f"filename*=UTF-8''{quote(safe + '_실험데이터.xlsx')}"})
 
 
 @router.get("/runsheet.xlsx")

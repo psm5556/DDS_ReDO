@@ -68,7 +68,7 @@ test("표 복사 → 엑셀에서 결과 채움 → 다시 붙여넣기 왕복",
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const pid = await createProject(page.request, "E2E 표 복사 왕복");
   await page.goto(`/projects/${pid}/step/1`);
-  await page.getByRole("button", { name: /표 복사/ }).click();
+  await page.getByRole("button", { name: "표 일괄 복사" }).click();
   await expect(page.getByText(/표 6행을 복사했습니다/)).toBeVisible();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const lines = copied.split(/\r?\n/); // Windows 클립보드는 CRLF
@@ -81,7 +81,7 @@ test("표 복사 → 엑셀에서 결과 채움 → 다시 붙여넣기 왕복",
   expect((await runs(page.request, pid)).map((r) => r.values.yield).sort()).toEqual([60, 61, 62, 63, 64, 65]);
 });
 
-test("엑셀 파일 업로드·다운로드 버튼은 없다 (보안 정책상 읽을 수 없음)", async ({ page }) => {
+test("엑셀 파일 업로드는 없다 (보안 정책상 읽을 수 없음)", async ({ page }) => {
   const pid = await createProject(page.request, "E2E 파일 버튼 없음");
   for (const path of [`/projects/${pid}/step/1`, `/projects/${pid}/experiments`]) {
     await page.goto(path);
@@ -89,6 +89,21 @@ test("엑셀 파일 업로드·다운로드 버튼은 없다 (보안 정책상 �
     await expect(page.getByText(/엑셀로 결과 올리기|엑셀 양식/)).toHaveCount(0);
     await expect(page.locator('input[type="file"]')).toHaveCount(0);
   }
+});
+
+test("툴바: 기존 데이터 추가가 맨 왼쪽, 표 일괄 복사는 아이콘, 엑셀 파일 다운로드", async ({ page }) => {
+  const pid = await createProject(page.request, "E2E 엑셀 다운로드");
+  await page.goto(`/projects/${pid}/step/1`);
+  const tools = page.locator(".table-tools button");
+  await expect(tools.first()).toHaveText("기존 데이터 추가");
+  const copy = page.getByRole("button", { name: "표 일괄 복사" });
+  await expect(copy).toHaveAttribute("title", "표 일괄 복사");
+  await expect(copy).toHaveText(""); // 아이콘만
+  // 입력하자마자 받아도 방금 입력한 값이 파일에 들어간다 (저장 후 다운로드)
+  await page.locator("#cell-0-2").fill("77.5");
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "엑셀 파일로 다운로드" }).click()]);
+  expect(dl.suggestedFilename()).toBe("E2E 엑셀 다운로드_실험데이터.xlsx");
+  expect((await runs(page.request, pid))[0].values.yield).toBe(77.5);
 });
 
 /** 마우스로 칸 a를 누른 채 칸 b까지 끌기 */

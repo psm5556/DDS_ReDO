@@ -12,8 +12,8 @@ test.beforeEach(async ({ page }) => {
 test("첫 DOE 생성 → ① 결과 입력 → ② 능동학습 결과·추가 DOE 확정 → 다음 차수 ①", async ({ page }) => {
   const pid = await createProject(page.request, "E2E 사이클", false);
   await page.goto(`/projects/${pid}/step/1`);
-  await expect(page.getByRole("heading", { name: "첫 DOE를 생성하세요" })).toBeVisible();
-  await page.getByRole("button", { name: "첫 DOE 생성 →" }).click();
+  await expect(page.getByRole("heading", { name: "어떻게 시작할까요?" })).toBeVisible();
+  await page.getByRole("button", { name: /새로 설계/ }).click();
 
   // ① 실험 데이터 입력: 인쇄와 결과 입력이 한 화면
   await expect(page).toHaveURL(new RegExp(`/projects/${pid}/step/1$`));

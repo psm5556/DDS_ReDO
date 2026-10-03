@@ -1,6 +1,7 @@
-import { ClipboardPaste, Copy, Trash2, X } from "lucide-react";
+import { ClipboardPaste, Copy, Download, Import, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, del, get, post } from "../api";
+import { ImportData } from "../components/ImportData";
 import { Confirm, Modal } from "../components/Modal";
 import { FAIL_REASONS, RunCard, type RowPatch } from "../components/RunCard";
 import { fmtFactor, STATUS_LABEL, when } from "../format";
@@ -53,6 +54,7 @@ export default function ResultsSection() {
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [failFor, setFailFor] = useState<Run | null>(null);
   const [deleteFor, setDeleteFor] = useState<Run | null>(null);
+  const [importing, setImporting] = useState(false);
   const [cancel, setCancel] = useState<Batch | null>(null);
   const savingRef = useRef(false);
   const readOnly = !can(project.my_role, "runner");
@@ -331,6 +333,32 @@ export default function ResultsSection() {
     toast(`표 ${shown.length}행을 복사했습니다. 엑셀에 붙여넣어 쓰고, 결과를 채운 뒤 다시 복사해 이 화면에 붙여넣으세요.`);
   };
 
+  // 엑셀 다운로드: 아직 저장 안 된 입력이 있으면 저장한 뒤 받는다 (서버에 저장된 값으로 파일을 만들기 때문)
+  const [downloading, setDownloading] = useState(false);
+  const fetchXlsx = useCallback(() => {
+    const a = document.createElement("a");
+    a.href = `/api/projects/${project.id}/runs.xlsx`;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setDownloading(false);
+  }, [project.id]);
+  const download = () => {
+    if (!Object.keys(edits).length) { fetchXlsx(); return; }
+    setDownloading(true);
+    flush();
+  };
+  useEffect(() => {
+    if (!downloading) return;
+    if (state === "saved" || state === "idle" || state === "offline") { fetchXlsx(); return; }
+    const t = setTimeout(() => { // 저장할 수 없는 칸(빨간 칸)이 남아 있으면 저장된 값으로 받는다
+      if (state === "dirty") toast("빨간 칸은 저장되지 않아 파일에 빠졌습니다.", true);
+      fetchXlsx();
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [downloading, state, fetchXlsx, toast]);
+
   const onCardSave = async (p: RowPatch) => {
     await saveRows([p], {});
     await load();
@@ -368,7 +396,9 @@ export default function ResultsSection() {
     <div className="stack">
       <div>
         <div className="row table-tools">
-          <button className="small" onClick={copyTable} disabled={!shown.length}><Copy size={14} />표 복사 (엑셀로)</button>
+          {editor && <button className="small" onClick={() => setImporting(true)} title="예전에 해 둔 실험 결과를 엑셀에서 붙여넣어 학습 데이터에 추가"><Import size={14} />기존 데이터 추가</button>}
+          <button className="small icon-only" onClick={copyTable} disabled={!shown.length} title="표 일괄 복사" aria-label="표 일괄 복사"><Copy size={15} /></button>
+          <button className="small icon-only" onClick={download} disabled={!runs.length || downloading} title="엑셀 파일로 다운로드" aria-label="엑셀 파일로 다운로드"><Download size={15} /></button>
           <label className="check small"><input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} />남은 실험만 보기</label>
           <span className="grow" />
           <span className={`save-state ${state === "dirty" || state === "saving" ? "dirty" : state === "offline" ? "offline" : ""}`} role="status">{stateText[state]}</span>
@@ -450,6 +480,11 @@ export default function ResultsSection() {
 
       {failFor && <FailModal run={failFor} onClose={() => setFailFor(null)}
         onConfirm={(status, reason) => saveRows([{ run_id: failFor.id, status, fail_reason: reason }], {})} />}
+      {importing && (
+        <Modal title="기존 실험 데이터 추가" wide onClose={() => setImporting(false)}>
+          <ImportData onCancel={() => setImporting(false)} onDone={async () => { setImporting(false); await load(); }} />
+        </Modal>
+      )}
       {deleteFor && <Confirm title={`${deleteFor.code} 삭제`} danger confirmLabel="삭제" onClose={() => setDeleteFor(null)}
         message={<>이 런을 표와 학습에서 뺍니다.{deleteFor.status === "done" ? " 입력한 결과도 학습에 쓰지 않습니다." : ""} 기록은 남아 있어 필요하면 복구할 수 있습니다.</>}
         onConfirm={async () => {

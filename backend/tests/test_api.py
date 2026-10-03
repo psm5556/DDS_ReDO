@@ -356,3 +356,87 @@ def test_delete_run_soft_and_authorized(client_for):
         assert db.get(Run, done["id"]).status == "excluded"
         assert db.query(Measurement).filter(Measurement.run_id == done["id"]).count() > 0
         assert db.query(AuditLog).filter(AuditLog.action == "run.delete").count() == 1
+
+
+def _plain_project(c, name="가져오기 테스트"):
+    r = c.post("/api/projects", json={"name": name, "config": {
+        "factors": [{"key": "temp", "name": "온도", "unit": "°C", "low": 100, "high": 200, "step": 1},
+                    {"key": "time", "name": "시간", "unit": "min", "low": 10, "high": 60, "step": 5}],
+        "responses": [{"key": "yield", "name": "수율", "unit": "%", "goal": "maximize"}],
+        "settings": {"batch_size": 3, "budget_runs": 30}}})
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+def test_import_existing_data(client_for):
+    owner = client_for("E1001")
+    pid = _plain_project(owner)
+    rows = [{"x": {"temp": 120, "time": 20}, "values": {"yield": 61.2}, "note": "작년 3월"},
+            {"x": {"temp": 120, "time": 20}, "values": {"yield": 63.0}},           # 같은 조건 → 반복
+            {"x": {"temp": 173.28, "time": 33}, "values": {"yield": 70.4}},       # 세팅 정밀도와 달라도 그대로
+            {"x": {"temp": 190, "time": 55}, "values": {}}]                        # 결과 없음 → 대기
+    r = owner.post(f"/api/projects/{pid}/import", json={"rows": rows})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["imported"] == 4 and body["done"] == 3 and body["replicated_conditions"] == 1
+    assert body["batch"]["seq"] == 0
+    runs = owner.get(f"/api/projects/{pid}/runs").json()
+    assert [x["code"] for x in runs] == ["0차-01", "0차-02", "0차-03", "0차-04"]
+    assert [x["replicate_no"] for x in runs] == [1, 2, 1, 1]
+    assert runs[2]["actual"]["temp"] == 173.28
+    assert runs[0]["deviation_note"] == "작년 3월"
+    assert [x["status"] for x in runs] == ["done", "done", "done", "planned"]
+    # 이어서 더 가져오면 같은 0차에 번호가 이어지고, 앞서 가져온 같은 조건과 반복으로 묶인다
+    r = owner.post(f"/api/projects/{pid}/import", json={"rows": [{"x": {"temp": 120, "time": 20}, "values": {"yield": 62}}]})
+    assert r.status_code == 200
+    runs = owner.get(f"/api/projects/{pid}/runs").json()
+    assert runs[-1]["code"] == "0차-05" and runs[-1]["replicate_no"] == 3
+    # 바로 학습할 수 있고, 다음 제안은 1차부터
+    opt = owner.post(f"/api/projects/{pid}/optimize", json={"validate_model": False})
+    assert opt.status_code == 200, opt.text
+    assert opt.json()["responses"][0]["data"]["n_obs"] == 4  # 결과가 있는 런만 (0차-04는 결과 없음)
+    rec = owner.post(f"/api/projects/{pid}/recommend-multi", json={"batch_size": 2})
+    assert rec.status_code == 200, rec.text
+    acc = owner.post(f"/api/projects/{pid}/batches/manual", json={"points": [{"temp": 150, "time": 30}]})
+    assert acc.json()["seq"] == 1
+
+
+def test_import_rejects_bad_rows_and_needs_editor(client_for):
+    owner = client_for("E1001")
+    pid = _plain_project(owner, "가져오기 거부")
+    r = owner.post(f"/api/projects/{pid}/import", json={"rows": [{"x": {"temp": 250, "time": 20}, "values": {"yield": 1}}]})
+    assert r.status_code == 422 and "범위" in r.json()["detail"]
+    r = owner.post(f"/api/projects/{pid}/import", json={"rows": [{"x": {"temp": 150}, "values": {}}]})
+    assert r.status_code == 422 and "시간" in r.json()["detail"]
+    r = owner.post(f"/api/projects/{pid}/import", json={"rows": [{"x": {"temp": 150, "time": 20}, "values": {"zzz": 1}}]})
+    assert r.status_code == 422
+    assert owner.get(f"/api/projects/{pid}/runs").json() == []  # 하나라도 틀리면 아무것도 들어가지 않음
+    # 다른 사업부 사용자는 존재도 모름(404), 열람자는 403
+    assert client_for("E2001").post(f"/api/projects/{pid}/import", json={"rows": [{"x": {"temp": 150, "time": 20}}]}).status_code == 404
+    viewer = client_for("E1003")
+    owner.post(f"/api/projects/{pid}/members", json={"user_id": viewer.get("/api/auth/me").json()["id"], "role": "viewer"})
+    assert viewer.post(f"/api/projects/{pid}/import", json={"rows": [{"x": {"temp": 150, "time": 20}}]}).status_code == 403
+
+
+def test_export_runs_xlsx(client_for):
+    import io as _io
+    from openpyxl import load_workbook
+    owner = client_for("E1001")
+    pid = _plain_project(owner, "엑셀 다운로드")
+    owner.post(f"/api/projects/{pid}/import", json={"rows": [
+        {"x": {"temp": 120, "time": 20}, "values": {"yield": 61.25}, "note": "메모1"},
+        {"x": {"temp": 120, "time": 20}, "values": {"yield": 63}},
+        {"x": {"temp": 150, "time": 30}, "values": {}}]})
+    rid = owner.get(f"/api/projects/{pid}/runs").json()[2]["id"]
+    owner.delete(f"/api/projects/{pid}/runs/{rid}")  # 삭제한 런은 빠짐
+    r = owner.get(f"/api/projects/{pid}/runs.xlsx")
+    assert r.status_code == 200
+    assert "filename*=UTF-8''" in r.headers["content-disposition"]
+    wb = load_workbook(_io.BytesIO(r.content))
+    rows = list(wb["실험 데이터"].iter_rows(values_only=True))
+    assert rows[0] == ("런 ID", "순서", "온도 [°C]", "시간 [min]", "수율 [%]", "반복", "메모", "상태")
+    assert rows[1] == ("0차-01", 1, 120, 20, 61.25, "1/2", "메모1", "완료")
+    assert len(rows) == 3
+    assert wb["DOE 설정"]["B1"].value == "엑셀 다운로드"
+    # 접근 권한 없는 사람은 존재도 모름
+    assert client_for("E2001").get(f"/api/projects/{pid}/runs.xlsx").status_code == 404

@@ -39,7 +39,7 @@ test("새 DOE 만들기(한 페이지): 클릭 5번 이하", async ({ page }) =>
   await page.getByLabel("상한 1행", { exact: true }).fill("200");
   await page.getByLabel("응답 1행", { exact: true }).fill("수율");
   await c.click(page.getByRole("button", { name: "DOE 만들기" }));
-  await expect(page.getByRole("heading", { name: "첫 DOE를 생성하세요" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "어떻게 시작할까요?" })).toBeVisible();
   expect(c.count).toBeLessThanOrEqual(MAX);
 });
 

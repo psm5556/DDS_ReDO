@@ -167,3 +167,74 @@ def parse_upload(filename: str, content: bytes, project: Project, cfg: ProjectCo
                 rec["note"] = "" if v is None else str(v)
         out.append(rec)
     return out, file_errors
+
+
+def rep_labels(runs: list[Run]) -> dict[int, str]:
+    """화면 '반복' 열과 같은 표기: 같은 차수에서 같은 조건이면 '몇 번째/전체', 지난 차수 조건을 다시 하면 '재확인'"""
+    groups: dict[tuple, list[Run]] = {}
+    for r in runs:
+        groups.setdefault((r.batch_id, tuple(sorted(r.planned.items()))), []).append(r)
+    out: dict[int, str] = {}
+    for g in groups.values():
+        g = sorted(g, key=lambda r: r.run_order)
+        for i, r in enumerate(g):
+            if len(g) > 1:
+                out[r.id] = f"{i + 1}/{len(g)}"
+            elif r.is_replicate_of_existing:
+                out[r.id] = "재확인"
+    return out
+
+
+def build_table_export(project: Project, cfg: ProjectConfig, runs: list[Run],
+                       meas: dict[tuple[int, str], Measurement]) -> bytes:
+    """화면의 실험 표 그대로 엑셀로 (런 ID · 순서 · 조건 · 결과 · 반복 · 메모 · 상태) + 설정 시트."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "실험 데이터"
+    unit = lambda name, u: f"{name} [{u}]" if u else name  # noqa: E731
+    heads = (["런 ID", "순서"] + [unit(f.name, f.unit) for f in cfg.factors]
+             + [unit(r.name, r.unit) for r in cfg.responses] + ["반복", "메모", "상태"])
+    ws.append(heads)
+    reps = rep_labels(runs)
+    for run in runs:
+        act = run.actual or run.planned
+        vals = []
+        for r in cfg.responses:
+            m = meas.get((run.id, r.key))
+            vals.append(m.value if m else None)
+        ws.append([run.code, run.run_order] + [act.get(f.key) for f in cfg.factors] + vals
+                  + [reps.get(run.id, ""), run.deviation_note or "", STATUS_KO.get(run.status, run.status)])
+    nf, nr = len(cfg.factors), len(cfg.responses)
+    for c in range(1, len(heads) + 1):
+        cell = ws.cell(row=1, column=c)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = HEAD_FILL
+        cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
+        ws.column_dimensions[get_column_letter(c)].width = 12 if c <= 2 + nf + nr else 14
+    ws.column_dimensions[get_column_letter(len(heads) - 1)].width = 28  # 메모
+    for j, r in enumerate(cfg.responses):  # 결과 칸은 응답의 소수점 자리수대로
+        fmt = "0" if r.decimals <= 0 else "0." + "0" * min(r.decimals, 10)
+        for row in range(2, len(runs) + 2):
+            ws.cell(row=row, column=3 + nf + j).number_format = fmt
+    ws.freeze_panes = "B2"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(heads))}{len(runs) + 1}"
+
+    st = wb.create_sheet("DOE 설정")
+    st.append(["DOE", project.name])
+    st.append([])
+    st.append(["인자", "단위", "하한", "상한", "세팅 정밀도"])
+    for f in cfg.factors:
+        st.append([f.name, f.unit, f.low, f.high, f.step])
+    st.append([])
+    goal = {"maximize": "최대 (망대)", "minimize": "최소 (망소)", "target": "목표값 (망목)"}
+    st.append(["응답", "단위", "목표", "목표값", "LSL", "USL", "가중치"])
+    for r in cfg.responses:
+        st.append([r.name, r.unit, goal.get(r.goal, r.goal), r.target, r.lsl, r.usl, r.weight])
+    for row in st.iter_rows():
+        if row[0].value in ("인자", "응답", "DOE"):
+            for cell in row:
+                cell.font = Font(bold=True)
+    st.column_dimensions["A"].width = 22
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

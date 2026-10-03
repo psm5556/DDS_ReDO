@@ -1,6 +1,8 @@
+import { ClipboardPaste, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { get, patch, post } from "../api";
+import { DataToConfigModal, type DataConfig } from "../components/DataToConfig";
 import { EditGrid, type GridCol } from "../components/EditGrid";
 import { MODE_LABEL } from "../format";
 import { notifyProjectsChanged } from "../guide/steps";
@@ -101,6 +103,21 @@ export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showErr, setShowErr] = useState(false);
+  // 기존 데이터에서 만들기: DOE를 만든 뒤 바로 가져올 행 (인자·응답 key로)
+  const [fromData, setFromData] = useState(false);
+  const [pending, setPending] = useState<{ x: Record<string, number | null>; values: Record<string, number | null>; note: string }[] | null>(null);
+  const applyData = (c: DataConfig) => {
+    const fk = c.factors.map((_, i) => `f${i + 1}`);
+    const rk = c.responses.map((_, i) => `r${i + 1}`);
+    setFactors(c.factors.map((f, i) => ({ ...blankF([]), key: fk[i], name: f.name, unit: f.unit, low: String(f.low), high: String(f.high), step: String(+f.step.toPrecision(6)) })));
+    setResponses(c.responses.map((r, i) => ({ ...blankR([]), key: rk[i], name: r.name, unit: r.unit, goal: r.goal, decimals: String(r.decimals) })));
+    setPending(c.rows.map((r) => ({
+      x: Object.fromEntries(fk.map((k, i) => [k, r.x[i]])),
+      values: Object.fromEntries(rk.map((k, i) => [k, r.y[i]])),
+      note: r.note,
+    })));
+    toast(`인자 ${c.factors.length}개 · 응답 ${c.responses.length}개를 채웠습니다. 목표·규격을 확인하고 DOE를 만드세요.`);
+  };
 
   useEffect(() => { get<SurrogateInfo[]>("/api/surrogates").then(setSurrogates).catch(() => {}); }, []);
   useEffect(() => {
@@ -124,7 +141,16 @@ export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
         title: "이미 한 실험에서 이 인자를 고정해 둔 값. 기존 실험 데이터에 이 값으로 채워집니다." }, FCOLS[FCOLS.length - 1]]
     : FCOLS;
   const rErr = responses.map(responseErrors);
-  const valid = name.trim().length > 0 && fErr.every((e) => !e.length) && rErr.every((e) => !e.length);
+  // 가져올 기존 데이터가 지금 인자 설정과 맞는지 (인자를 새로 넣었거나 범위를 좁힌 경우)
+  const dataErr: string[] = [];
+  if (pending) {
+    for (const f of factors) {
+      const vs = pending.map((r) => r.x[f.key]).filter((v): v is number => typeof v === "number");
+      if (vs.length < pending.length) dataErr.push(`기존 데이터에 '${f.name || "새 인자"}' 값이 없습니다.`);
+      else if (vs.some((v) => v < Number(f.low) - 1e-9 || v > Number(f.high) + 1e-9)) dataErr.push(`기존 데이터의 '${f.name}' 값이 범위(${f.low}~${f.high}) 밖입니다.`);
+    }
+  }
+  const valid = name.trim().length > 0 && fErr.every((e) => !e.length) && rErr.every((e) => !e.length) && !dataErr.length;
   const d = factors.length;
   const recInit = Math.max(2 * d + 2, 10);
   const initPts = settings.initial_points ?? recInit;
@@ -152,8 +178,21 @@ export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
         onSaved?.();
       } else {
         const p = await post<ProjectDetail>("/api/projects", body);
-        toast("DOE를 만들었습니다.");
         notifyProjectsChanged();
+        if (pending?.length) {
+          try {
+            const rows = pending.map((r) => ({ x: r.x, values: Object.fromEntries(responses.map((x) => [x.key, r.values[x.key] ?? null])), note: r.note }));
+            const res = await post<{ imported: number; done: number }>(`/api/projects/${p.id}/import`, { rows });
+            notifyProjectsChanged();
+            toast(`DOE를 만들고 기존 데이터 ${res.imported}건을 가져왔습니다.`);
+            nav(`/projects/${p.id}/step/${res.done === res.imported ? 2 : 1}`);
+          } catch (e) {
+            toast(`DOE는 만들었지만 기존 데이터를 가져오지 못했습니다: ${(e as Error).message}`, true);
+            nav(`/projects/${p.id}/step/1`);
+          }
+          return;
+        }
+        toast("DOE를 만들었습니다.");
         nav(`/projects/${p.id}/step/1`);
       }
     } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
@@ -166,10 +205,19 @@ export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
       {!editing && (
         <div className="page-head">
           <div className="grow"><h1>새 DOE 만들기</h1></div>
+          <button onClick={() => setFromData(true)} title="이미 해 둔 실험 데이터(엑셀 표)를 붙여넣으면 인자·응답을 채우고, DOE를 만든 뒤 데이터를 가져옵니다"><ClipboardPaste size={16} />기존 데이터에서 만들기</button>
           <Link className="btn ghost" to="/">취소</Link>
         </div>
       )}
       {err && <div className="notice err" style={{ marginBottom: 12 }}>{err}</div>}
+      {fromData && <DataToConfigModal onClose={() => setFromData(false)} onApply={applyData} />}
+      {pending && (
+        <div className="notice info" style={{ marginBottom: 12 }}>
+          <ClipboardPaste size={16} />
+          <span className="grow">기존 데이터 <b>{pending.length}건</b>은 DOE를 만든 뒤 바로 가져와 학습합니다. 응답의 목표·규격을 확인하세요.</span>
+          <button className="small ghost" onClick={() => setPending(null)}><X size={14} />데이터 빼기</button>
+        </div>
+      )}
       <div className={editing ? "doe-form" : "panel doe-form"}>
         <section>
           <div className="form-row">
@@ -226,11 +274,12 @@ export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
           </p>
         </section>
 
-        {showErr && !valid && <div className="notice err">빨간 칸을 고쳐 주세요.{!name.trim() ? " DOE 이름을 입력하세요." : ""}</div>}
+        {showErr && !valid && <div className="notice err">빨간 칸을 고쳐 주세요.{!name.trim() ? " DOE 이름을 입력하세요." : ""} {dataErr.join(" ")}</div>}
+        {!showErr && dataErr.length > 0 && <div className="notice warn">{dataErr.join(" ")}</div>}
         <div className="row form-foot">
           {editing && <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="변경 사유 (선택)" aria-label="변경 사유" style={{ flex: 1, minWidth: 220 }} />}
           {!editing && <span className="grow" />}
-          <button className="primary big" disabled={saving} onClick={save}>{saving ? "저장 중" : editing ? "설정 저장" : "DOE 만들기"}</button>
+          <button className="primary big" disabled={saving} onClick={save}>{saving ? "저장 중" : editing ? "설정 저장" : pending ? `DOE 만들기 + 데이터 ${pending.length}건 가져오기` : "DOE 만들기"}</button>
         </div>
       </div>
     </div>

@@ -246,6 +246,24 @@ class ExcludeIn(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class ImportRow(BaseModel):
+    x: dict[str, float]                       # 인자 key → 실제 세팅값 (반올림하지 않고 그대로 학습)
+    values: dict[str, float | None] = {}      # 응답 key → 측정값 (비어도 됨: 나중에 표에서 입력)
+    note: str = ""
+
+
+class ImportIn(BaseModel):
+    """이미 해 둔 실험 데이터 가져오기 (엑셀 붙여넣기)"""
+    rows: list[ImportRow] = Field(min_length=1, max_length=5000)
+
+
+class ImportOut(BaseModel):
+    batch: "BatchOut"
+    imported: int
+    done: int
+    replicated_conditions: int  # 2회 이상 측정한 조건 수 (산포 추정에 쓰임)
+
+
 class ManualRunIn(BaseModel):
     points: list[dict[str, float]] = Field(min_length=1)
     note: str = ""
@@ -335,3 +353,6 @@ class ShareOut(BaseModel):
     created_by: str
     revoked_at: datetime | None
     view_count: int = 0
+
+
+ImportOut.model_rebuild()

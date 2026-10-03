@@ -209,3 +209,19 @@ details.more-all section h4 { margin-bottom: 8px; display: flex; align-items: ba
 .grid-table.selecting { user-select: none; }
 .grid-table td[data-sel], .grid-table td[data-sel] input, .grid-table td[data-sel] select { background: #dbeafe !important; }
 .grid-table th[data-sel] { background: #bfdbfe !important; color: var(--brand); }
+
+/* 첫 화면: 새로 설계 / 기존 데이터로 시작 */
+.start-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 8px; }
+.choice { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; height: auto; min-height: 120px; padding: 20px; text-align: left;
+  border: 1px solid var(--line); border-radius: var(--radius-l, 16px); background: var(--panel); box-shadow: var(--shadow-1, none); white-space: normal; }
+.choice:hover:not(:disabled) { border-color: var(--brand-500); background: var(--brand-soft); }
+.choice > svg { color: var(--brand); }
+.choice b { font-size: 16px; color: var(--ink); }
+.choice span { color: var(--ink-2); font-size: var(--fs-s); font-weight: 400; }
+
+.paste-drop { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 20px; text-align: center;
+  border: 2px dashed var(--line); border-radius: var(--radius-m, 12px); color: var(--ink-2); background: var(--panel-2); }
+.paste-drop > svg { color: var(--brand); }
+.paste-drop b { color: var(--ink); font-size: 15px; }
+.paste-drop:focus { outline: none; border-color: var(--brand-500); }
+.table-tools button.icon-only { padding: 0 9px; min-width: 34px; justify-content: center; }
