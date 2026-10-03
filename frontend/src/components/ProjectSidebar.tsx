@@ -1,12 +1,17 @@
-import { ChevronDown, ChevronRight, Folder, FolderOpen, Inbox, MoreHorizontal, Plus, Search, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, Home, Inbox, LogOut, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search, Share2, Star, Sun, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
-import { api, del, get } from "../api";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { api, del, get, post } from "../api";
+import { useAuth } from "../auth";
+import { useTheme } from "../theme";
 import { ROLE_LABEL } from "../format";
 import { allowedSteps, autoStep, nextAction, notifyProjectsChanged, PROJECTS_CHANGED, STEPS } from "../guide/steps";
 import { useToast } from "../toast";
 import type { ProjectSummary, Share } from "../types";
 import { ProjectMenu } from "./ProjectMenu";
+import type { useSideLayout } from "./sideLayout";
+
+type SideLayout = ReturnType<typeof useSideLayout>;
 
 type Filter = "all" | "fav" | "shared" | "received";
 const FILTERS: [Filter, string][] = [["all", "전체"], ["fav", "즐겨찾기"], ["shared", "내가 공유"], ["received", "공유받음"]];
@@ -67,7 +72,7 @@ function Item({ p, onFav }: { p: ProjectSummary; onFav: (p: ProjectSummary) => v
       <div className="side-row">
         <button className="side-caret" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={`${p.name} 단계 ${open ? "접기" : "펼치기"}`}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>
-        {active ? <FolderOpen size={15} className="side-folder" /> : <Folder size={15} className="side-folder" />}
+        <i className={`side-dot ${a.mine ? "todo" : ""}`} aria-hidden="true" />
         <NavLink to={`/projects/${p.id}`} className="side-name" end title="DOE 설정 열기">{p.name}</NavLink>
         {p.is_favorite && <Star size={13} className="side-fav" fill="currentColor" aria-label="즐겨찾기" />}
         <button className="side-more" aria-label={`${p.name} 메뉴`} aria-haspopup="menu" title="멤버·공유, 즐겨찾기, 복제, 삭제"
@@ -75,12 +80,13 @@ function Item({ p, onFav }: { p: ProjectSummary; onFav: (p: ProjectSummary) => v
           <MoreHorizontal size={16} />
         </button>
       </div>
-      <div className="side-marks">
-        <span className={`mark role-${p.my_role}`} title="내 권한">{ROLE_LABEL[p.my_role]}</span>
-        {p.active_shares > 0 && <span className="mark share" title="이 DOE의 예측을 다른 사람에게 공유 중">공유 {p.active_shares}</span>}
-        {p.member_count > 0 && <span className="mark" title="함께하는 멤버 수 (소유자 제외)">멤버 {p.member_count}</span>}
-        {p.my_role !== "owner" && <span className="mark" title="소유자">{p.owner.name}</span>}
-      </div>
+      {(p.my_role !== "owner" || p.active_shares > 0 || p.member_count > 0) && (
+        <div className="side-marks">
+          {p.my_role !== "owner" && <span className={`mark role-${p.my_role}`} title="내 권한">{ROLE_LABEL[p.my_role]} · {p.owner.name}</span>}
+          {p.active_shares > 0 && <span className="mark share" title="이 DOE의 예측을 다른 사람에게 공유 중"><Share2 size={11} />공유 {p.active_shares}</span>}
+          {p.member_count > 0 && <span className="mark" title="함께하는 멤버 수 (소유자 제외)"><Users size={11} />멤버 {p.member_count}</span>}
+        </div>
+      )}
       <div className={`side-next ${a.mine ? "mine" : ""}`}>{a.mine && <i className="dot" aria-hidden="true" />}{a.text}</div>
       {open && <SubMenu p={p} />}
       {menu && <ProjectMenu p={p} at={menu} onClose={closeMenu} onFav={onFav} />}
@@ -93,7 +99,7 @@ function ReceivedItem({ s }: { s: Share }) {
     <div className="side-item">
       <div className="side-row">
         <span className="side-caret" aria-hidden="true" />
-        <Inbox size={15} className="side-folder" />
+        <Inbox size={13} className="side-dot" style={{ background: "none", width: 13, height: 13, color: "var(--ink-4)" }} />
         <NavLink to={`/shared/${s.token}`} className="side-name">{s.project_name}</NavLink>
       </div>
       <div className="side-marks">
@@ -108,7 +114,7 @@ function ReceivedItem({ s }: { s: Share }) {
 }
 
 /** 왼쪽 사이드바: DOE 목록(검색·즐겨찾기·공유·권한 표식). 이름 = 설정, 펼치면 단계, ⋯/우클릭 = 멤버·공유 등 */
-export function ProjectSidebar() {
+export function ProjectSidebar({ layout }: { layout?: SideLayout }) {
   const [mine, setMine] = useState<ProjectSummary[] | null>(null);
   const [member, setMember] = useState<ProjectSummary[]>([]);
   const [received, setReceived] = useState<Share[]>([]);
@@ -117,6 +123,10 @@ export function ProjectSidebar() {
   const [open, setOpen] = useState(false); // 좁은 화면에서 목록 펼치기
   const cur = useCurrent();
   const toast = useToast();
+  const { user, refresh } = useAuth();
+  const nav = useNavigate();
+  const { theme, toggle: toggleTheme } = useTheme();
+  const themeLabel = theme === "dark" ? "밝은 화면으로" : "어두운 화면으로";
 
   const load = useCallback(async () => {
     const qs = encodeURIComponent(q);
@@ -161,11 +171,45 @@ export function ProjectSidebar() {
     </div>
   );
 
+  // 접힌 사이드바: 아이콘만 (펼치기 · 홈 · 새 DOE · 사용자)
+  if (layout?.collapsed) {
+    return (
+      <aside className="sidebar rail" aria-label="DOE 목록 (접힘)">
+        <button className="icon-btn rail-btn" onClick={layout.toggle} aria-label="사이드바 펼치기" title="사이드바 펼치기 (Ctrl+B)"><PanelLeftOpen size={18} /></button>
+        <Link className="icon-btn rail-btn" to="/" aria-label="첫 화면" title="첫 화면"><Home size={18} /></Link>
+        <Link className="icon-btn rail-btn primary" to="/new" aria-label="새 DOE 만들기" title="새 DOE 만들기"><Plus size={18} /></Link>
+        <span className="grow" />
+        <button className="icon-btn rail-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button>
+        {user && <span className="avatar rail-me" title={`${user.name} · ${user.department}`}>{user.name.slice(0, 1)}</span>}
+      </aside>
+    );
+  }
+
+  // 오른쪽 가장자리를 끌어 너비 조절 (두 번 누르면 기본 너비)
+  const startResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!layout) return;
+    e.preventDefault();
+    const x0 = e.clientX, w0 = layout.width;
+    document.body.classList.add("resizing");
+    const move = (ev: PointerEvent) => layout.setWidth(w0 + ev.clientX - x0);
+    const up = () => {
+      document.body.classList.remove("resizing");
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   return (
     <aside className={`sidebar ${open ? "open" : ""}`} aria-label="DOE 목록">
       <button className="side-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
         <span>{current ? current.name : "DOE 목록"}</span><span aria-hidden="true">{open ? "▴" : "▾"}</span>
       </button>
+      <div className="side-brand-row">
+        <Link to="/" className="side-brand" aria-label="DDS ReDO 홈"><span className="logo" aria-hidden="true">Re</span>DDS ReDO<small>레시피 최적화</small></Link>
+        {layout && <button className="icon-btn side-fold" onClick={layout.toggle} aria-label="사이드바 접기" title="사이드바 접기 (Ctrl+B)"><PanelLeftClose size={17} /></button>}
+      </div>
       <div className="side-body">
         <Link className="btn primary side-new" to="/new"><Plus size={15} />새 DOE 만들기</Link>
         <div className="side-search">
@@ -198,6 +242,26 @@ export function ProjectSidebar() {
           </>
         )}
       </div>
+      {user && (
+        <div className="side-me">
+          <span className="avatar" aria-hidden="true">{user.name.slice(0, 1)}</span>
+          <span className="who"><b>{user.name}</b><small>{user.department} · {user.business_unit}</small></span>
+          <button className="icon-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
+          <button className="icon-btn" title="로그아웃" aria-label="로그아웃"
+            onClick={async () => { await post("/api/auth/logout").catch(() => {}); await refresh(); nav("/login"); }}>
+            <LogOut size={15} />
+          </button>
+        </div>
+      )}
+      {layout && (
+        <div className="side-resizer" role="separator" aria-orientation="vertical" aria-label="사이드바 너비 조절"
+          aria-valuenow={layout.width} aria-valuemin={200} aria-valuemax={480} tabIndex={0} title="끌어서 너비 조절 · 두 번 누르면 기본 너비"
+          onPointerDown={startResize} onDoubleClick={() => layout.setWidth(264)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft") { e.preventDefault(); layout.setWidth(layout.width - 16); }
+            if (e.key === "ArrowRight") { e.preventDefault(); layout.setWidth(layout.width + 16); }
+          }} />
+      )}
     </aside>
   );
 }

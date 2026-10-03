@@ -1,6 +1,6 @@
 import { ClipboardPaste, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { get, patch, post } from "../api";
 import { DataToConfigModal, type DataConfig } from "../components/DataToConfig";
 import { EditGrid, type GridCol } from "../components/EditGrid";
@@ -83,7 +83,7 @@ const blankR = (rows: RRow[]): RRow => ({ key: newKey("r", rows.map((x) => x.key
   criterion: "auto", weight: "1", input_min: "", input_max: "", decimals: "2" });
 
 /** DOE 만들기(/new)·DOE 설정(DOE 이름 클릭) 한 페이지: 기본 정보 + 인자 표 + 응답·목표 표 + 실험 계획 한 줄 */
-export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
+export default function WizardPage({ onSaved, footLeft }: { onSaved?: () => void; footLeft?: ReactNode } = {}) {
   const { pid } = useParams();
   const editing = !!pid;
   const nav = useNavigate();
@@ -104,7 +104,8 @@ export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
   const [err, setErr] = useState<string | null>(null);
   const [showErr, setShowErr] = useState(false);
   // 기존 데이터에서 만들기: DOE를 만든 뒤 바로 가져올 행 (인자·응답 key로)
-  const [fromData, setFromData] = useState(false);
+  const [search] = useSearchParams();
+  const [fromData, setFromData] = useState(!editing && search.get("from") === "data"); // 첫 화면 '기존 데이터로 시작'
   const [pending, setPending] = useState<{ x: Record<string, number | null>; values: Record<string, number | null>; note: string }[] | null>(null);
   const applyData = (c: DataConfig) => {
     const fk = c.factors.map((_, i) => `f${i + 1}`);
@@ -204,7 +205,7 @@ export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
     <div className={editing ? "" : "page"} style={editing ? undefined : { maxWidth: 1240 }}>
       {!editing && (
         <div className="page-head">
-          <div className="grow"><h1>새 DOE 만들기</h1></div>
+          <div className="grow"><div className="crumb"><Link to="/">내 DOE</Link> / 새 DOE</div><h1>새 DOE 만들기</h1></div>
           <button onClick={() => setFromData(true)} title="이미 해 둔 실험 데이터(엑셀 표)를 붙여넣으면 인자·응답을 채우고, DOE를 만든 뒤 데이터를 가져옵니다"><ClipboardPaste size={16} />기존 데이터에서 만들기</button>
           <Link className="btn ghost" to="/">취소</Link>
         </div>
@@ -218,7 +219,7 @@ export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
           <button className="small ghost" onClick={() => setPending(null)}><X size={14} />데이터 빼기</button>
         </div>
       )}
-      <div className={editing ? "doe-form" : "panel doe-form"}>
+      <div className="doe-form">
         <section>
           <div className="form-row">
             <label className="field" style={{ flex: 2 }}><span className="lbl">DOE 이름<span className="req-mark" aria-label="필수">*</span></span>
@@ -277,6 +278,7 @@ export default function WizardPage({ onSaved }: { onSaved?: () => void } = {}) {
         {showErr && !valid && <div className="notice err">빨간 칸을 고쳐 주세요.{!name.trim() ? " DOE 이름을 입력하세요." : ""} {dataErr.join(" ")}</div>}
         {!showErr && dataErr.length > 0 && <div className="notice warn">{dataErr.join(" ")}</div>}
         <div className="row form-foot">
+          {footLeft}
           {editing && <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="변경 사유 (선택)" aria-label="변경 사유" style={{ flex: 1, minWidth: 220 }} />}
           {!editing && <span className="grow" />}
           <button className="primary big" disabled={saving} onClick={save}>{saving ? "저장 중" : editing ? "설정 저장" : pending ? `DOE 만들기 + 데이터 ${pending.length}건 가져오기` : "DOE 만들기"}</button>

@@ -23,6 +23,14 @@ export function autoStep(p: Pick<ProjectSummary, "runs_total" | "runs_open" | "m
   return 2;
 }
 
+/** 주소의 단계 번호(n)를 실제로 보여 줄 단계로: 실험이 없으면 0(첫 DOE), 권한 밖 단계면 자동 단계 */
+export function resolveStep(p: Pick<ProjectSummary, "runs_total" | "runs_open" | "my_role">, n?: number): Step {
+  const auto = autoStep(p);
+  if (p.runs_total === 0) return 0;
+  const step = (n ? n : auto === 0 ? 1 : auto) as Step;
+  return allowedSteps(p.my_role).includes(step) ? step : auto;
+}
+
 /** 목록·사이드바에 보여 줄 '지금 할 일' 한 줄과, 내가 해야 하는 일인지 여부 */
 export function nextAction(p: ProjectSummary): { step: Step; text: string; mine: boolean } {
   const step = autoStep(p);

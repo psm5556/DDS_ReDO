@@ -1,4 +1,4 @@
-import { ClipboardPaste, Copy, Download, Import, Trash2, X } from "lucide-react";
+import { CircleHelp, Copy, Download, Import, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, del, get, post } from "../api";
 import { ImportData } from "../components/ImportData";
@@ -404,13 +404,13 @@ export default function ResultsSection() {
           <span className={`save-state ${state === "dirty" || state === "saving" ? "dirty" : state === "offline" ? "offline" : ""}`} role="status">{stateText[state]}</span>
           {!readOnly && state !== "idle" && state !== "saved" && <button className="small primary" onClick={flush}>지금 저장</button>}
           {editor && canCancel && <button className="small danger" onClick={() => setCancel(latest)}><X size={14} />{latest.seq}차 취소</button>}
+          {!readOnly && (
+            <span className="help-tip">
+              <button aria-label="표 사용법" type="button"><CircleHelp size={16} /></button>
+              <span className="tip" role="tooltip">엑셀에서 복사해 <b>Ctrl+V</b> · 런 ID·머리글을 함께 붙여도 자동으로 맞춤<br />표를 드래그해 고른 칸은 <b>Ctrl+C</b>로 엑셀에 복사 · 입력하면 자동 저장</span>
+            </span>
+          )}
         </div>
-        {!readOnly && (
-          <div className="paste-hint">
-            <ClipboardPaste size={15} />
-            <span>엑셀에서 복사해 <b>Ctrl+V</b> · 런 ID·머리글을 함께 붙여도 자동으로 맞춤 · 표를 드래그해 고른 칸은 <b>Ctrl+C</b>로 엑셀에 복사 · 자동 저장</span>
-          </div>
-        )}
         {shown.length === 0 && <div className="empty"><h3>남은 실험이 없습니다</h3><p>모든 결과가 입력되었습니다.</p></div>}
 
         {narrow ? shown.map((r) => (
@@ -447,16 +447,16 @@ export default function ResultsSection() {
                       <td className="ro rep-cell" title={r.reason || undefined}>{repLabel.get(r.id) ?? ""}</td>
                       {input(r, noteCol, ri)}
                       <td className="ro status-cell" aria-label={`${r.code} 상태`} data-copy={r.status === "running" ? STATUS_LABEL.planned : STATUS_LABEL[r.status]}>
-                        {r.status === "done" ? <span className="chip ok">완료</span>
+                        {r.status === "done" ? <span className="st done"><i />완료</span>
                           : r.status === "failed" || r.status === "infeasible" ? (
                             <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                              <span className="chip err" title={r.fail_reason || undefined}>{STATUS_LABEL[r.status]}</span>
+                              <span className="st fail" title={r.fail_reason || undefined}><i />{STATUS_LABEL[r.status]}</span>
                               {!readOnly && <button className="link-btn small" onClick={() => void saveRows([{ run_id: r.id, status: "planned" }], {})}>되돌리기</button>}
                             </span>
                           ) : (
                             <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                              <span className="muted small">대기</span>
-                              {!readOnly && <button className="ghost small" title="실험을 못 했으면 실패·실행불가로 표시" onClick={() => setFailFor(r)}>못 함</button>}
+                              <span className="st"><i />대기</span>
+                              {!readOnly && <button className="link-btn small muted" title="실험을 못 했으면 실패·실행불가로 표시" onClick={() => setFailFor(r)}>못 함</button>}
                             </span>
                           )}
                       </td>

@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleDot, ClipboardPaste, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDot, ClipboardPaste, Plus, Printer, RefreshCw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { get, post } from "../api";
@@ -15,9 +15,10 @@ import ResultsSection from "../sections/ResultsSection";
 import { useSurrogates } from "../sections/shared";
 import { useToast } from "../toast";
 import type { Batch, MultiProposal, MultiRecommend, OptimizeResult, RecipeOption, RespPred, ResponseDef } from "../types";
-import { allowedSteps, autoStep, notifyProjectsChanged, STEPS, type Step } from "./steps";
+import { notifyProjectsChanged, resolveStep, type Step } from "./steps";
 
-/** 한 사이클의 두 화면: ① 실험 데이터 입력(첫 DOE 생성 포함) → ② 능동학습 결과(레시피 최적화 + 추가 DOE 제안) → 다음 차수 ① */
+/** 한 사이클의 두 화면: ① 실험 데이터 입력(첫 DOE 생성 포함) → ② 능동학습 결과(레시피 최적화 + 추가 DOE 제안) → 다음 차수 ①
+ *  단계 탭은 DOE 머리글(ProjectPage)에 있다. */
 export default function GuideView() {
   const { project } = useProject();
   const { n } = useParams();
@@ -27,44 +28,15 @@ export default function GuideView() {
     get<Batch[]>(`/api/projects/${project.id}/batches`).then(setBatches).catch(() => {});
   }, [project.id, project.runs_total, project.runs_done]);
 
-  const allowed = allowedSteps(project.my_role);
-  const auto = autoStep(project);
-  let step: Step = n ? (Number(n) as Step) : auto === 0 ? 1 : auto;
-  if (project.runs_total === 0) step = 0;
-  else if (!allowed.includes(step)) step = auto;
-  const round = batches.reduce((m, b) => Math.max(m, b.seq), 0);
+  const step = resolveStep(project, n ? Number(n) : undefined);
   const go = (s: Step) => nav(`/projects/${project.id}/step/${s}`);
 
   return (
     <div className="guide">
-      <Stepper step={step} allowed={allowed} round={round} open={project.runs_open} onGo={go} started={batches.length > 0} />
       {step === 0 && <StepStart onDone={() => go(1)} onImported={(allDone) => go(allDone ? 2 : 1)} />}
       {step === 1 && <StepExperiment batches={batches} onNext={() => go(2)} />}
       {step === 2 && <StepLearn onDone={() => go(1)} />}
     </div>
-  );
-}
-
-function Stepper({ step, allowed, round, open, onGo, started }: { step: Step; allowed: Step[]; round: number; open: number; onGo: (s: Step) => void; started: boolean }) {
-  return (
-    <nav className="stepper" aria-label="진행 단계">
-      <span className="round">{round > 0 || started ? `${round}차` : "시작"}</span>
-      <ol>
-        {STEPS.map((s) => {
-          let state = step === 0 ? (s.n === 1 ? "now" : "todo") : s.n === step ? "now" : s.n < step ? "done" : "todo";
-          if (s.n === 1 && state === "done" && open > 0) state = "partial"; // 결과가 남아 있으면 완료가 아님
-          const ok = step !== 0 && allowed.includes(s.n);
-          return (
-            <li key={s.n} className={state}>
-              <button className="step-btn" disabled={!ok} aria-current={state === "now" ? "step" : undefined} onClick={() => onGo(s.n)}>
-                <span className="num">{state === "done" ? "✓" : s.n}</span>
-                <span className="txt">{s.label}<small>{state === "partial" ? `결과 ${open}건 남음` : step === 0 && s.n === 1 ? "첫 DOE 생성" : s.hint}</small></span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
   );
 }
 
@@ -145,7 +117,7 @@ function StepExperiment({ batches, onNext }: { batches: Batch[]; onNext: () => v
       <div className="row" style={{ alignItems: "flex-start", marginBottom: 12 }}>
         <StepHead title={open > 0 ? `${onlyLatest ? `${latest.seq}차 ` : ""}실험 ${open}건의 결과를 입력하세요` : "모든 결과가 입력되었습니다"} />
         <span className="grow" />
-        {open > 0 && <Link className="btn" to={`/projects/${project.id}/print`} target="_blank">실험 시트 인쇄 (QR)</Link>}
+        {open > 0 && <Link className="btn ghost" to={`/projects/${project.id}/print`} target="_blank"><Printer size={15} />실험 시트 인쇄 (QR)</Link>}
       </div>
       <ResultsSection />
       <div className="step-foot">
@@ -165,20 +137,22 @@ const PURPOSE: Record<string, string> = { exploit: "좋은 결과 기대", explo
 const score = (d: number) => Math.round(Math.max(0, Math.min(d, 1)) * 100);
 const RD = { decimals: 3 } as ResponseDef;
 
-/** 응답 하나의 결과를 쉬운 말 한 줄로: '식각률 약 320 nm/min · 규격(300~340) 안에 들 확률 83%' */
+/** 응답 하나의 결과를 쉬운 말 한 줄로: 이름 · 약 320 nm/min · [규격 안에 들 확률 막대] · 83% (300~340일 확률) */
 function PlainResponse({ r, d }: { r: RespPred; d: ResponseDef }) {
   const p = r.spec_prob;
   const level = p === null ? (r.desirability >= 0.7 ? "ok" : r.desirability >= 0.4 ? "mid" : "low") : p >= 0.9 ? "ok" : p >= 0.5 ? "mid" : "low";
   const Icon = level === "ok" ? CheckCircle2 : level === "mid" ? CircleDot : AlertTriangle;
   const spec = d.lsl != null && d.usl != null ? `${d.lsl}~${d.usl}` : d.lsl != null ? `${d.lsl} 이상` : d.usl != null ? `${d.usl} 이하` : "";
   const goal = d.goal === "maximize" ? "클수록 좋음" : d.goal === "minimize" ? "작을수록 좋음" : `목표 ${d.target}`;
+  const v = p ?? r.desirability;
   return (
     <li className={`plain-resp ${level}`}>
-      <Icon size={18} />
+      <Icon size={17} aria-hidden="true" />
       <span className="nm">{r.name}</span>
-      <span className="val">약 <b>{fmtResp(r.mean, d)}</b> {r.unit}</span>
-      <span className="muted">{p !== null ? <>규격({spec}) 안에 들 확률 <b className="pr">{pct(p)}</b></> : goal}</span>
-      {level === "low" && <span className="hint-low">{p !== null ? "아직 규격을 만족하기 어려움" : "목표에 못 미침"}</span>}
+      <span className="val">약 <b>{fmtResp(r.mean, d)}</b><small>{r.unit}</small></span>
+      <span className="pbar" aria-hidden="true"><i style={{ width: `${Math.round(Math.max(0, Math.min(v, 1)) * 100)}%` }} /></span>
+      <span className="pct">{p !== null ? pct(p) : `${score(r.desirability)}점`}
+        <small>{p !== null ? `${spec}일 확률` : `만족도 · ${goal}`}{level === "low" ? " · 어려움" : ""}</small></span>
     </li>
   );
 }
@@ -266,27 +240,28 @@ function StepLearn({ onDone }: { onDone: () => void }) {
   const s = b ? score(b.desirability) : 0;
 
   return (
-    <section className="panel step-panel">
-      <StepHead title={editor ? "학습 결과를 보고 다음 실험을 확정하세요" : "학습 결과"} />
-
+    <section>
       {/* 1. 추천 레시피 */}
       <div className="block">
-        <div className="block-head">
-          <h3><Sparkles size={16} />추천 레시피</h3>
-          {b && <span className={`score-badge ${s >= 80 ? "good" : s >= 50 ? "mid" : "low"}`} title="모든 응답의 목표를 함께 만족하는 정도 (100점 만점)">목표 달성 {s}점</span>}
-        </div>
-        {!opt && !optErr && <div className="busy"><span className="spinner" /> 실험 결과로 학습하는 중</div>}
-        {optErr && <div className="notice warn">{optErr}</div>}
+        {!opt && !optErr && <><h3 className="lbl"><Sparkles size={14} />추천 레시피</h3><div className="busy"><span className="spinner" /> 실험 결과로 학습하는 중</div></>}
+        {optErr && <><h3 className="lbl" style={{ marginBottom: 10 }}><Sparkles size={14} />추천 레시피</h3><div className="notice warn">{optErr}</div></>}
         {b && opt && (
-          <>
-            <div className="cond-big">
-              {cfg.factors.map((f) => <div key={f.key}><span>{f.name}</span><b>{fmtFactor(b.x[f.key], f)}<small>{f.unit}</small></b></div>)}
+          <div className="hero">
+            <div>
+              <h3 className="lbl"><Sparkles size={14} />추천 레시피</h3>
+              <div className="cond-big">
+                {cfg.factors.map((f) => <div key={f.key}><span>{f.name}</span><b>{fmtFactor(b.x[f.key], f)}<small>{f.unit}</small></b></div>)}
+              </div>
+              <ul className="plain-resps">{b.responses.map((r) => <PlainResponse key={r.key} r={r} d={rdef(r.key)} />)}</ul>
+              {(opt.tentative || b.extrapolation) && (
+                <p className="tentative"><AlertTriangle size={14} />아직 실험이 적어 예측이 정확하지 않을 수 있습니다. 다음 실험을 하면 더 정확해집니다.</p>
+              )}
             </div>
-            <ul className="plain-resps">{b.responses.map((r) => <PlainResponse key={r.key} r={r} d={rdef(r.key)} />)}</ul>
-            {(opt.tentative || b.extrapolation) && (
-              <p className="tentative"><AlertTriangle size={14} />아직 실험이 적어 예측이 정확하지 않을 수 있습니다. 다음 실험을 하면 더 정확해집니다.</p>
-            )}
-          </>
+            <div className={`gauge score-badge ${s >= 80 ? "good" : s >= 50 ? "mid" : "low"}`} title="모든 응답의 목표를 함께 만족하는 정도 (100점 만점)">
+              <div className="ring" style={{ "--p": s } as React.CSSProperties}><div><b>{s}</b><span>목표 달성</span></div></div>
+              <p>{b.responses.length > 1 ? `응답 ${b.responses.length}개를 함께 본 점수` : "목표를 만족하는 정도"} (100점 만점)</p>
+            </div>
+          </div>
         )}
       </div>
 
@@ -294,17 +269,15 @@ function StepLearn({ onDone }: { onDone: () => void }) {
       {editor && (
         <div className="block">
           <div className="block-head">
-            <h3>다음에 할 실험 {items.length}건</h3>
+            <h3>다음에 할 실험 <span className="cnt">{items.length}건</span></h3>
             <span className="grow" />
             <button className="small ghost" onClick={() => void propose()} disabled={busy}><RefreshCw size={13} />다시 고르기</button>
+            {b && <button className="small" onClick={() => addRows(b.x, 3, "확인 실험", "확인 실험: 추천 레시피가 예측대로 재현되는지 확인")}><Plus size={13} />추천 레시피 확인 실험 3회</button>}
           </div>
           {busy && <div className="busy"><span className="spinner" /> 다음 실험 조건을 고르는 중</div>}
           {err && <div className="notice warn">{err}</div>}
           <EditGrid name="next" rows={rows} cols={pcols} onChange={onRows} minRows={0} errors={rowErrors} showMissing={!valid && items.length > 0}
             makeRow={() => ({ ...Object.fromEntries(cfg.factors.map((f) => [f.key, ""])), purpose: "직접 추가", _i: "-1" })} addLabel="조건 추가" />
-          <div className="row" style={{ marginTop: 8 }}>
-            {b && <button className="small" onClick={() => addRows(b.x, 3, "확인 실험", "확인 실험: 추천 레시피가 예측대로 재현되는지 확인")}><Plus size={13} />추천 레시피 확인 실험 3회</button>}
-          </div>
           <div className="step-foot">
             <span className="grow" />
             <button className="primary big" disabled={busy || saving || !valid} onClick={accept}>
@@ -316,7 +289,7 @@ function StepLearn({ onDone }: { onDone: () => void }) {
       {/* 3. 자세히 보기: 필요한 사람만 */}
       {b && opt && (
         <details className="more-all" onToggle={toggle("all")}>
-          <summary>자세히 보기 <span className="muted small">대안 · 예측 범위 · 모델 신뢰도 · 그래프 · 시뮬레이션</span></summary>
+          <summary>자세히 보기 <span className="muted small" style={{ fontWeight: 400 }}>대안 · 예측 범위 · 모델 신뢰도 · 그래프 · 시뮬레이션</span></summary>
           {open.all && (
             <div className="stack" style={{ marginTop: 12 }}>
               <section>

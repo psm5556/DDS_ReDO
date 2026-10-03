@@ -13,7 +13,7 @@ export const SCALE_PROB: [number, string][] = [[0, "#f7f3ea"], [0.5, "#cde6d4"],
 
 export const baseLayout = {
   margin: { l: 56, r: 12, t: 8, b: 44 },
-  font: { family: "IBM Plex Sans KR, Pretendard, Malgun Gothic, sans-serif", size: 12, color: "#44515e" },
+  font: { family: "IBM Plex Sans KR, Pretendard, Malgun Gothic, sans-serif", size: 12, color: "#8a8a94" },
   paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
   hoverlabel: { font: { family: "IBM Plex Sans KR, Pretendard, Malgun Gothic, sans-serif" } },
 };

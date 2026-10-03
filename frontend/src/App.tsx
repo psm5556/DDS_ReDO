@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation, useParams } from "react-router-do
 import { RequireAuth } from "./auth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ProjectSidebar } from "./components/ProjectSidebar";
+import { useSideLayout } from "./components/sideLayout";
 import { TopBar } from "./components/TopBar";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
@@ -15,19 +16,19 @@ function Shell({ children }: { children: React.ReactNode }) {
   return <RequireAuth><TopBar />{children}</RequireAuth>;
 }
 
-/** 왼쪽 DOE 목록 + 오른쪽 작업 영역 */
 /** 주소가 바뀌면 오류 상태를 초기화한다 (다른 화면으로 이동하면 다시 정상 표시) */
 function RouteBoundary({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   return <ErrorBoundary key={pathname} label="이 화면">{children}</ErrorBoundary>;
 }
 
+/** 왼쪽 DOE 목록(로고·사용자 포함) + 오른쪽 작업 영역. 상단바는 두지 않아 화면 높이를 작업에 쓴다 */
 function SideShell({ children }: { children: React.ReactNode }) {
+  const side = useSideLayout();
   return (
     <RequireAuth>
-      <TopBar />
-      <div className="app-shell">
-        <ProjectSidebar />
+      <div className={`app-shell ${side.collapsed ? "side-collapsed" : ""}`} style={{ "--side-w": `${side.width}px` } as React.CSSProperties}>
+        <ProjectSidebar layout={side} />
         <div className="app-main"><RouteBoundary>{children}</RouteBoundary></div>
       </div>
     </RequireAuth>

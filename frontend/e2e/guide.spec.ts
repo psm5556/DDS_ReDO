@@ -79,12 +79,12 @@ test("사이드바: DOE 이름 = 설정, 펼치면 두 단계, 표식·검색·�
   await side.getByRole("searchbox", { name: "DOE 검색" }).fill(name);
   const item = () => side.locator(".side-item", { hasText: name });
   await expect(item()).toHaveCount(1);
-  await expect(item().locator(".mark.role-owner")).toHaveText("소유자");
+  await expect(item().locator(".mark.role-owner")).toHaveCount(0); // 내가 소유자면 권한 표식 없음 (조용한 목록)
   await expect(item().locator(".side-next")).toContainText("결과 입력 · 6건 남음");
 
   await item().locator(".side-name").click();
   await expect(page).toHaveURL(new RegExp(`/projects/${pid}$`));
-  await expect(page.getByRole("heading", { name: "DOE 설정" })).toBeVisible();
+  await expect(page.locator(".proj-tabs .ptab.on")).toHaveText("설정");
 
   const steps = item().locator(".side-steps");
   await expect(steps.locator("li")).toHaveText([/실험 데이터 입력/, /능동학습 결과/]);

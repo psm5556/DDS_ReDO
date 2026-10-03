@@ -31,7 +31,7 @@ test("새 DOE를 기존 데이터로 시작: 붙여넣기 → 범위 밖 넓히�
   const pid = await createProject(page.request, "E2E 기존 데이터로 시작", false);
   await page.goto(`/projects/${pid}/step/1`);
   await expect(page.getByRole("heading", { name: "어떻게 시작할까요?" })).toBeVisible();
-  await page.getByRole("button", { name: /기존 데이터로 시작/ }).click();
+  await page.locator(".choice", { hasText: "기존 데이터로 시작" }).click();
   await pasteOnPage(page, TABLE);
 
   await expect(page.getByLabel("온도 1행")).toHaveValue("120");
@@ -61,10 +61,12 @@ test("새 DOE를 기존 데이터로 시작: 붙여넣기 → 범위 밖 넓히�
 test("범위 밖 행은 빼고 가져올 수도 있고, 결과가 빈 행은 ① 실험 데이터 입력에 남는다", async ({ page }) => {
   const pid = await createProject(page.request, "E2E 범위 밖 빼기", false);
   await page.goto(`/projects/${pid}/step/1`);
-  await page.getByRole("button", { name: /기존 데이터로 시작/ }).click();
+  await page.locator(".choice", { hasText: "기존 데이터로 시작" }).click();
   await pasteOnPage(page, "온도\t시간\t수율\n120\t20\t61\n230\t50\t55\n150\t45\t\n");
   await page.getByRole("button", { name: /범위 밖 1행 빼기/ }).click();
   await page.getByRole("button", { name: /2건 가져오기/ }).click();
+  // 가져오기가 끝나면 가져오기 그리드 대신 실험 표(런 ID 0차-01…)가 보인다
+  await expect(page.getByText("0차-02")).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(new RegExp(`/projects/${pid}/step/1$`));
   await expect(page.locator(".grid-table tbody tr")).toHaveCount(2);
   const rs = await runs(page.request, pid);

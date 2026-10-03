@@ -14,7 +14,7 @@ function counter() {
 
 async function home(page: Page) {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "왼쪽 목록에서 DOE를 고르세요" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /안녕하세요/ })).toBeVisible();
 }
 const sideItem = (page: Page, name: string) => page.locator(".sidebar .side-item", { hasText: name });
 
